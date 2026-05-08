@@ -29,5 +29,16 @@ core
 # 로컬 Pintos 테스트 히스토리
 pintos/.vscode/pintos-test-history.json
 
+# CMake / CLion local outputs
+.idea/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Editor / OS local files
+.vscode/
+
 # macOS
 .DS_Store
