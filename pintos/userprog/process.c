@@ -385,6 +385,7 @@ process_exec (void *f_name) {
 	/* 적재에 실패하면 종료한다. */
 	printf ("[process_exec] before branch: if (!success), success=%d\n", success);
 	if (!success) {
+		// 뭔가 실패해서 여기로 들어오고 정상적으로 종료되고 끝남. 여기서 어떤 일이 생기는지 뒤겨보면 될 듯?
 		uint64_t *new_pml4 = current->pml4;
 		current->pml4 = old_pml4;
 
@@ -659,6 +660,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+	printf ("[load] start file_name=\"%s\", if_=%p\n", file_name, (void *) if_);
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -756,6 +758,10 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					printf ("[load] before load_segment(file=%p, ofs=%llu, upage=%p, "
+							"read_bytes=%u, zero_bytes=%u, writable=%d)\n",
+							(void *) file, (unsigned long long) file_page,
+							(void *) mem_page, read_bytes, zero_bytes, writable);
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
 						goto done;
@@ -1012,6 +1018,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		printf ("[load_segment] before debug_backtrace()\n");
+		debug_backtrace();
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
