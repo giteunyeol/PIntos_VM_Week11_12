@@ -376,34 +376,57 @@ process_exec (void *f_name) {
 	*/
 
 	/* 그다음 바이너리를 적재한다. */
+	printf ("[process_exec] before load(file_name=\"%s\", &_if)\n", file_name);
 	success = load (file_name, &_if);
+	printf ("[process_exec] before palloc_free_page(file_name=%p), success=%d\n",
+			(void *) file_name, success);
 	palloc_free_page (file_name);
 
 	/* 적재에 실패하면 종료한다. */
+	printf ("[process_exec] before branch: if (!success), success=%d\n", success);
 	if (!success) {
 		uint64_t *new_pml4 = current->pml4;
 		current->pml4 = old_pml4;
 
+		printf ("[process_exec] before process_activate(current=%p)\n",
+				(void *) current);
 		process_activate(current);
 
+		printf ("[process_exec] before branch: if (new_pml4 != NULL), new_pml4=%p\n",
+				(void *) new_pml4);
 		if (new_pml4 != NULL) {
+			printf ("[process_exec] before pml4_destroy(new_pml4=%p)\n",
+					(void *) new_pml4);
 			pml4_destroy(new_pml4);
 		}
 
+		printf ("[process_exec] before return -1\n");
 		return -1;
 	}
 
+	printf ("[process_exec] before branch: if (old_exec_file != NULL), old_exec_file=%p\n",
+			(void *) old_exec_file);
 	if (old_exec_file != NULL) {
-    	file_allow_write(old_exec_file);
-    	file_close(old_exec_file);
+		printf ("[process_exec] before file_allow_write(old_exec_file=%p)\n",
+				(void *) old_exec_file);
+		file_allow_write(old_exec_file);
+		printf ("[process_exec] before file_close(old_exec_file=%p)\n",
+				(void *) old_exec_file);
+		file_close(old_exec_file);
 	}
 
+	printf ("[process_exec] before branch: if (old_pml4 != NULL), old_pml4=%p\n",
+			(void *) old_pml4);
 	if (old_pml4 != NULL) {
+		printf ("[process_exec] before pml4_destroy(old_pml4=%p)\n",
+				(void *) old_pml4);
 		pml4_destroy(old_pml4);
 	}
 
 	/* 전환된 프로세스를 시작한다. */
+	printf ("[process_exec] before do_iret(&_if)\n");
 	do_iret (&_if);
+	printf ("[process_exec] before NOT_REACHED()\n");
 	NOT_REACHED ();
 }
 
