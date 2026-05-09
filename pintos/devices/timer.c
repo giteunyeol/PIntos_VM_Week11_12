@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include "debug_trace.h"
 #include "list.h"
 #include "threads/interrupt.h"
 #include "threads/io.h"
@@ -124,8 +125,14 @@ timer_print_stats (void) {
 
 /* 타이머 인터럽트 핸들러. */
 static void
-timer_interrupt (struct intr_frame *args UNUSED) {
+timer_interrupt (struct intr_frame *args) {
 	ticks++;
+	if (ticks <= 3) {
+		DEG_NOTE ("tick", "ticks=%lld f=%p rip=%p rsp=%p",
+				(long long) ticks, (void *) args,
+				args != NULL ? (void *) args->rip : NULL,
+				args != NULL ? (void *) args->rsp : NULL);
+	}
 	thread_awake(ticks); // 기상 시각이 지난 스레드를 꺼내 깨운다.
 	thread_tick (); // 현재 스레드의 실행 tick을 누적하고, time slice를 다 썼으면 양보를 예약한다.
 }
