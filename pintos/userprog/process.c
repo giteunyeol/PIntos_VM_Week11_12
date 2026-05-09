@@ -922,6 +922,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* 이 페이지를 프로세스 주소 공간에 추가한다. */
 		if (!install_page (upage, kpage, writable)) {
+			printf("fail\n");
 			palloc_free_page (kpage);
 			return false;
 		}
