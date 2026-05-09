@@ -2,6 +2,8 @@
 
 #include "threads/malloc.h"
 #include "vm/vm.h"
+
+#include "debug_trace.h"
 #include "vm/inspect.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -43,6 +45,8 @@ static struct frame *vm_evict_frame (void);
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
+	DEG_CALL ("type=%d upage=%p writable=%d init=%p aux=%p",
+			type, upage, writable, (void *) init, aux);
 
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
@@ -132,6 +136,8 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+	DEG_CALL ("f=%p addr=%p user=%d write=%d not_present=%d",
+		(void *) f, addr, user, write, not_present);
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
