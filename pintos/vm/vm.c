@@ -6,6 +6,10 @@
 #include "debug_trace.h"
 #include "vm/inspect.h"
 
+static bool spt_hash_cmp_va_less(const struct hash_elem *a,
+		const struct hash_elem *b, void *aux UNUSED);
+static uint64_t spt_hash_hash(const struct hash_elem *e, void *aux UNUSED);
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -179,7 +183,8 @@ vm_do_claim_page (struct page *page) {
 
 /* Initialize new supplemental page table */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	hash_init(&spt->table, spt_hash_hash, spt_hash_cmp_va_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -193,4 +198,19 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+static bool
+spt_hash_cmp_va_less(const struct hash_elem *a, const struct hash_elem *b,
+			 void *aux UNUSED) {
+	const struct page *pga = hash_entry (a, struct page, elem);
+	const struct page *pgb = hash_entry (b, struct page, elem);
+
+	return (uintptr_t) pga->va < (uintptr_t) pgb->va; // 정수형 비교가 직관적
+}
+
+static uint64_t
+spt_hash_hash(const struct hash_elem *e, void *aux UNUSED) {
+	struct page *pg = hash_entry (e, struct page, elem);
+	return hash_bytes (&pg->va, sizeof &pg->va);
 }
