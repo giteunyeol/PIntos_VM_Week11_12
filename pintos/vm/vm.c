@@ -70,27 +70,40 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: Fill this function. */
+spt_find_page (struct supplemental_page_table *spt, void *va) {
+	// 임시 탐색용 page
+	struct page temp_pg = {
+		.va = va,
+	};
+
+	struct page *page = hash_entry (hash_find(&spt->table, &temp_pg.elem),
+		struct page, elem);
 
 	return page;
 }
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
-	int succ = false;
-	/* TODO: Fill this function. */
-
-	return succ;
+spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
+	void *exist_or_null = hash_entry (hash_insert(&spt->table, &page->elem),
+			struct page, elem);
+	bool is_already_exist = exist_or_null != NULL;
+	ASSERT (!is_already_exist); // 이런 경우가 있을지 모르겠지만? 일단 막기
+	if (is_already_exist) {
+		return true;
+	}
+	return false;
 }
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	void *removed_or_null = hash_entry (hash_delete(&spt->table, &page->elem),
+			struct page, elem);
+	bool is_not_found = removed_or_null == NULL;
+	ASSERT (is_not_found); // 이런 경우가 있을지 모르겠지만? 일단 막기
+
+	// TODO: 만약에?? ref cnt 추가하면 여기만 바꾸면 되긴 할 듯?
 	vm_dealloc_page (page);
-	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -191,6 +204,10 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	// TODO: 프로세스와 page의 관계나 그런게 아직 확실하게 생각나지 않음.
+	// fork, exit 등으로 2개 이상에서 동일한 page를 볼 수 있고, 제거할 때도 고민되는데
+	// ref cnt가 지금 당장 생각하기에는 확실한 후보인데 구현 하면서 바뀔 수 있어서 구현 미룸
+	// kill도 마찬가지
 }
 
 /* Free the resource hold by the supplemental page table */
