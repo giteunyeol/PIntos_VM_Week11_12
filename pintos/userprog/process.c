@@ -20,7 +20,6 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "intrinsic.h"
-#include "debug_trace.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -141,8 +140,6 @@ initd (void *aux_) {
 	struct initd_aux *aux = aux_;
 	char *file_name = aux->file_name;
 	struct child_status *status = aux->child_status;
-
-	DEG_CALL ("file_name=\"%s\" status=%p", file_name, (void *) status);
   
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
@@ -354,7 +351,6 @@ error:
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
-	DEG_CALL ("f_name=%p file_name=\"%s\"", f_name, file_name);
 	bool success;
 	struct thread *current = thread_current();
 	uint64_t *old_pml4 = current->pml4;
@@ -384,26 +380,22 @@ process_exec (void *f_name) {
 	palloc_free_page (file_name);
 
 	/* 적재에 실패하면 종료한다. */
-	DEG_BRANCH ("!success", !success);
 	if (!success) {
-		// 뭔가 실패해서 여기로 들어오고 정상적으로 종료되고 끝남. 여기서 어떤 일이 생기는지 뒤겨보면 될 듯?
 		uint64_t *new_pml4 = current->pml4;
 		current->pml4 = old_pml4;
 
 		process_activate(current);
 
-		DEG_BRANCH ("new_pml4 != NULL", new_pml4 != NULL);
 		if (new_pml4 != NULL) {
 			pml4_destroy(new_pml4);
 		}
 
-		DEG_RETURN ("value=-1");
 		return -1;
 	}
 
 	if (old_exec_file != NULL) {
-		file_allow_write(old_exec_file);
-		file_close(old_exec_file);
+    	file_allow_write(old_exec_file);
+    	file_close(old_exec_file);
 	}
 
 	if (old_pml4 != NULL) {
@@ -644,7 +636,6 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
-	DEG_CALL ("file_name=\"%s\" if_=%p", file_name, (void *) if_);
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -753,9 +744,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* 스택을 설정한다. */
-	bool stack_ok = setup_stack (if_);
-	DEG_BRANCH ("!stack_ok", !stack_ok);
-	if (!stack_ok)
+	if (!setup_stack (if_))
 		goto done;
 
 	/* 시작 주소를 설정한다. */
@@ -813,8 +802,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	file = NULL;
 
 done:
-	DEG_NOTE ("goto", "success=%d file=%p file_name_copy=%p",
-			success, (void *) file, (void *) file_name_copy);
 	/* We arrive here whether the load is successful or not. */
 	if (!success && file != NULL) {
 		file_close (file);
@@ -822,7 +809,6 @@ done:
 	if (file_name_copy != NULL) {
 		palloc_free_page(file_name_copy);
 	}
-	DEG_RETURN ("value=%d", success);
 	return success;
 }
 
@@ -893,20 +879,12 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-	DEG_CALL ("file=%p ofs=%lld upage=%p read_bytes=%u zero_bytes=%u writable=%d",
-			(void *) file, (long long) ofs, (void *) upage,
-			read_bytes, zero_bytes, writable);
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
 	file_seek (file, ofs);
-	DEG_LOOP_START ("read_bytes > 0 || zero_bytes > 0",
-			"read_bytes=%u zero_bytes=%u", read_bytes, zero_bytes);
 	while (read_bytes > 0 || zero_bytes > 0) {
-		DEG_LOOP ("read_bytes > 0 || zero_bytes > 0",
-				"upage=%p read_bytes=%u zero_bytes=%u",
-				(void *) upage, read_bytes, zero_bytes);
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
@@ -927,6 +905,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* 이 페이지를 프로세스 주소 공간에 추가한다. */
 		if (!install_page (upage, kpage, writable)) {
+			printf("fail\n");
 			palloc_free_page (kpage);
 			return false;
 		}
@@ -936,10 +915,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 	}
-	DEG_LOOP_END ("read_bytes > 0 || zero_bytes > 0",
-			"upage=%p read_bytes=%u zero_bytes=%u",
-			(void *) upage, read_bytes, zero_bytes);
-	DEG_RETURN ("value=1");
 	return true;
 }
 
@@ -1004,19 +979,11 @@ lazy_load_segment (struct page *page, void *aux) {
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-	DEG_CALL ("file=%p ofs=%lld upage=%p read_bytes=%u zero_bytes=%u writable=%d",
-			(void *) file, (long long) ofs, (void *) upage,
-			read_bytes, zero_bytes, writable);
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	DEG_LOOP_START ("read_bytes > 0 || zero_bytes > 0",
-			"read_bytes=%u zero_bytes=%u", read_bytes, zero_bytes);
 	while (read_bytes > 0 || zero_bytes > 0) {
-		DEG_LOOP ("read_bytes > 0 || zero_bytes > 0",
-				"upage=%p read_bytes=%u zero_bytes=%u",
-				(void *) upage, read_bytes, zero_bytes);
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
@@ -1025,23 +992,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
-		bool is_init_failed = !vm_alloc_page_with_initializer (VM_ANON,
-				upage, writable, lazy_load_segment, aux);
-		DEG_BRANCH("is_init_failed", is_init_failed);
-		if (is_init_failed) {
-			DEG_RETURN ("value=false");
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+					writable, lazy_load_segment, aux))
 			return false;
-		}
 
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 	}
-	DEG_LOOP_END ("read_bytes > 0 || zero_bytes > 0",
-			"upage=%p read_bytes=%u zero_bytes=%u",
-			(void *) upage, read_bytes, zero_bytes);
-	DEG_RETURN ("value=true");
 	return true;
 }
 
