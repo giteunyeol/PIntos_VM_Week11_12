@@ -58,15 +58,15 @@ deg_trace_run (struct thread *t) {
     - 내부 분기에서 막는 방식이라 호출부의 DEG_* 코드를 지우지 않아도 된다.
 
    공통 출력 형식:
-      [DEG] r=thrd tid= 3 p4=0x8004246000 k=call   fn=load ...
+      [DEG] r=thrd tid= 3 p4=0x8004246000 fn=load         k=call   ...
 
    공통 필드:
     - r: 실행 문맥. thrd는 스레드 문맥, intr는 인터럽트 문맥, none은 현재
       스택에서 유효한 thread 구조체를 찾지 못한 경우다.
     - tid: 현재 스레드 tid. 스레드가 없으면 TID_ERROR가 나온다.
     - p4: 현재 스레드의 pml4. USERPROG가 아니거나 스레드가 없으면 0이다.
-    - k: 로그 종류. 6글자 폭으로 출력되므로 호출자가 정하는 kind는 짧게 쓴다.
     - fn: 매크로를 호출한 C 함수 이름. 12글자까지만 보여주고 길면 잘린다.
+    - k: 로그 종류. 6글자 폭으로 출력되므로 호출자가 정하는 kind는 짧게 쓴다.
 
    DEG_CALL(fmt, ...):
     - 함수에 들어온 직후 인자를 확인할 때 쓴다.
@@ -144,10 +144,10 @@ deg_trace_run (struct thread *t) {
 	do {                                                                        \
 		if (deg_trace_enabled ()) {                                             \
 			struct thread *deg_t_ = deg_trace_thread ();                        \
-			printf ("[DEG] r=%-4.4s tid=%2d p4=%12p k=%-6.6s fn=%-12.12s "      \
+			printf ("[DEG] r=%-4.4s tid=%2d p4=%12p fn=%-12.12s k=%-6.6s "      \
 					fmt_ "\n", deg_trace_run (deg_t_),                          \
 					deg_t_ != NULL ? deg_t_->tid : TID_ERROR,                   \
-					deg_trace_pml4 (deg_t_), kind_, __func__, ##__VA_ARGS__);   \
+					deg_trace_pml4 (deg_t_), __func__, kind_, ##__VA_ARGS__);   \
 		}                                                                       \
 	} while (0)
 
