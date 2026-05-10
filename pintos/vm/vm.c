@@ -17,6 +17,7 @@ static void init_frame_table(void);
  * intialize codes. */
 void
 vm_init (void) {
+	DEG_CALL ("void");
 	vm_anon_init ();
 	vm_file_init ();
 #ifdef EFILESYS  /* For project 4 */
@@ -26,6 +27,7 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 	init_frame_table ();
+	DEG_RETURN ("void");
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -75,6 +77,7 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
+	DEG_CALL ("spt=%p va=%p", (void *) spt, va);
 	void *aligned_va = pg_round_down (va);
 
 	// 임시 탐색용 page
@@ -82,31 +85,53 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 		.va = aligned_va,
 	};
 
-	struct page *page = hash_entry (hash_find(&spt->table, &temp_pg.elem),
-			struct page, elem);
+	struct hash_elem *found = hash_find (&spt->table, &temp_pg.elem);
 
+	bool is_not_found = found != NULL;
+	if (is_not_found) {
+		return NULL;
+	}
+
+	struct page *page = hash_entry (found, struct page, elem);
+
+	DEG_RETURN ("value=%p", (void *) page);
 	return page;
 }
 
 /* Insert PAGE into spt with validation. */
 bool
 spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
+	ASSERT(spt != NULL);
+	ASSERT(page != NULL);
+	DEG_CALL ("spt=%p page=%p va=%p", (void *) spt, (void *) page, page->va);
+
+	bool result = true;
+
+	struct hash_elem *old = hash_insert (&spt->table, &page->elem);
+
 	//TODO: 나중에 요소 있는 경우에는 false 여야하면 ASSERT 지우고 early return 추가
-	void *exist_or_null = hash_entry (hash_insert(&spt->table, &page->elem),
-			struct page, elem);
-	bool is_already_exist = exist_or_null != NULL;
+	bool is_already_exist = old != NULL;
 	ASSERT(!is_already_exist);
-	return true;
+
+	DEG_RETURN ("value=%d", result);
+	return result;
 }
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	ASSERT(spt != NULL);
+	ASSERT(page != NULL);
+	DEG_CALL ("spt=%p page=%p va=%p", (void *) spt, (void *) page, page->va);
+
+	struct hash_elem *found = hash_delete (&spt->table, &page->elem);
+
 	//TODO: 나중에 요소 없는 경우도 지원해야 하면 ASSERT 지우고 early return 추가
-	void *removed_or_null = hash_entry (hash_delete(&spt->table, &page->elem),
-			struct page, elem);
-	bool is_not_found = removed_or_null == NULL;
-	ASSERT (is_not_found);
+	bool is_not_found = found != NULL;
+	ASSERT (!is_not_found);
+
 	vm_dealloc_page (page);
+
+	DEG_RETURN ("void");
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -134,6 +159,7 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
+	DEG_CALL ("void");
 	struct frame *frame = NULL;
 
 	frame = palloc_get_page (PAL_USER);
@@ -147,6 +173,7 @@ vm_get_frame (void) {
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+	DEG_RETURN ("value=%p", (void *) frame);
 	return frame;
 }
 
@@ -162,12 +189,14 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
+		bool not_present) {
 	DEG_CALL ("f=%p addr=%p user=%d write=%d not_present=%d",
-		(void *) f, addr, user, write, not_present);
+				(void *) f, addr, user, write, not_present);
+
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
+
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 
@@ -185,18 +214,22 @@ vm_dealloc_page (struct page *page) {
 /* Claim the page that allocate on VA. */
 bool
 vm_claim_page (void *va) {
+	DEG_CALL ("va=%p", va);
 	struct page *page = NULL;
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	page = spt_find_page (spt, va);
 
 	ASSERT (page != NULL);
-	return vm_do_claim_page (page);
+	bool result = vm_do_claim_page (page);
+	DEG_RETURN ("value=%d page=%p", result, (void *) page);
+	return result;
 }
 
 /* Claim the PAGE and set up the mmu. */
 static bool
 vm_do_claim_page (struct page *page) {
+	DEG_CALL ("page=%p va=%p", (void *) page, page != NULL ? page->va : NULL);
 	struct frame *frame = vm_get_frame ();
 
 	/* Set links */
@@ -206,23 +239,31 @@ vm_do_claim_page (struct page *page) {
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	spt_insert_page (spt, page);
 
-	return swap_in (page, frame->kva);
+	bool result = swap_in (page, frame->kva);
+	DEG_RETURN ("value=%d page=%p frame=%p kva=%p",
+				result, (void *) page, (void *) frame, frame->kva);
+	return result;
 }
 
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
+	DEG_CALL ("spt=%p", (void *) spt);
 	hash_init (&spt->table, spt_hash_hash, spt_hash_cmp_va_less, NULL);
+	DEG_RETURN ("void");
 }
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	DEG_CALL ("dst=%p src=%p", (void *) dst, (void *) src);
 	// TODO: 프로세스와 page의 관계나 그런게 아직 확실하게 생각나지 않음.
 	// fork, exit 등으로 2개 이상에서 동일한 page를 볼 수 있고, 제거할 때도 고민되는데
 	// ref cnt가 지금 당장 생각하기에는 확실한 후보인데 구현 하면서 바뀔 수 있어서 구현 미룸
 	// kill도 마찬가지
+	DEG_RETURN ("value=false");
+	return false;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -248,5 +289,7 @@ spt_hash_hash(const struct hash_elem *e, void *aux UNUSED) {
 }
 
 static void init_frame_table(void) {
+	DEG_CALL ("frame_table=%p", (void *) &frame_table);
 	list_init (&frame_table);
+	DEG_RETURN ("void");
 }
