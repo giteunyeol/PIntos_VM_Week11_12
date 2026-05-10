@@ -106,7 +106,7 @@ kill (struct intr_frame *f) {
    "Exception and Interrupt Reference"의 "Interrupt 14--Page Fault
    Exception (#PF)" 항목을 참고하라. */
 static void
-page_fault (struct intr_frame *f) {
+ (struct intr_frame *f) {
 	bool not_present;  /* 참이면 페이지 부재, 거짓이면 읽기 전용 페이지에 쓰기. */
 	bool write;        /* 참이면 쓰기 접근, 거짓이면 읽기 접근. */
 	bool user;         /* 참이면 사용자 접근, 거짓이면 커널 접근. */

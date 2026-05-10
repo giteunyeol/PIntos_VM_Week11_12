@@ -8,8 +8,8 @@
  * intialize codes. */
 void
 vm_init (void) {
-	vm_anon_init ();
-	vm_file_init ();
+	vm_anon_init (); // anonymous page
+	vm_file_init (); // file_backed page 
 #ifdef EFILESYS  /* For project 4 */
 	pagecache_init ();
 #endif
@@ -42,7 +42,7 @@ static struct frame *vm_evict_frame (void);
  * `vm_alloc_page`. */
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
-		vm_initializer *init, void *aux) {
+		vm_initializer *init, void *aux) { //나중에 필요하면 만들 준비가 된 페이지 정보
 
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 

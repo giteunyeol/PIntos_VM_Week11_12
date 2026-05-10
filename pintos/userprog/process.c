@@ -876,6 +876,12 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * 성공하면 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가 나면
  * false를 반환한다. */
+
+ /*
+ 주석 추가
+ UPAGE: User page의 줄임말. 사용자 가상 주소 공간 안의 페이지 시작 주소
+ 실행 파일에서 offset부터 시작하는 내용 일부를 읽어서, VM의 UPAGE부터 배치
+ */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -883,8 +889,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	file_seek (file, ofs);
-	while (read_bytes > 0 || zero_bytes > 0) {
+	file_seek (file, ofs); //파일 현재 읽기,쓰기 위치를 파일 시작점에서 offset만큼 떨어진 곳으로 옮김. 
+	while (read_bytes > 0 || zero_bytes > 0) { // 채울 바이트가 남아있으니 계속 채움
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
