@@ -6,9 +6,12 @@
 #include "debug_trace.h"
 #include "vm/inspect.h"
 
+struct list frame_table; // 관리 주체가 애매해서 일단 vm에 둠.
+
 static bool spt_hash_cmp_va_less(const struct hash_elem *a,
 		const struct hash_elem *b, void *aux UNUSED);
 static uint64_t spt_hash_hash(const struct hash_elem *e, void *aux UNUSED);
+static void init_frame_table(void);
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -22,6 +25,7 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	init_frame_table ();
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -79,7 +83,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	};
 
 	struct page *page = hash_entry (hash_find(&spt->table, &temp_pg.elem),
-		struct page, elem);
+			struct page, elem);
 
 	return page;
 }
@@ -87,24 +91,21 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 /* Insert PAGE into spt with validation. */
 bool
 spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
+	//TODO: 나중에 요소 있는 경우에는 false 여야하면 ASSERT 지우고 early return 추가
 	void *exist_or_null = hash_entry (hash_insert(&spt->table, &page->elem),
 			struct page, elem);
 	bool is_already_exist = exist_or_null != NULL;
-	ASSERT (!is_already_exist); // 이런 경우가 있을지 모르겠지만? 일단 막기
-	if (is_already_exist) {
-		return true;
-	}
-	return false;
+	ASSERT(!is_already_exist);
+	return true;
 }
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	//TODO: 나중에 요소 없는 경우도 지원해야 하면 ASSERT 지우고 early return 추가
 	void *removed_or_null = hash_entry (hash_delete(&spt->table, &page->elem),
 			struct page, elem);
 	bool is_not_found = removed_or_null == NULL;
-	ASSERT (is_not_found); // 이런 경우가 있을지 모르겠지만? 일단 막기
-
-	// TODO: 만약에?? ref cnt 추가하면 여기만 바꾸면 되긴 할 듯?
+	ASSERT (is_not_found);
 	vm_dealloc_page (page);
 }
 
@@ -134,7 +135,15 @@ vm_evict_frame (void) {
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
-	/* TODO: Fill this function. */
+
+	frame = palloc_get_page (PAL_USER);
+
+	bool need_evict = frame == NULL;
+	if (need_evict) {
+		PANIC ("todo - need_evict");
+	}
+
+	list_push_front(&frame_table, &frame->elem); // 새거니까 추가
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -175,10 +184,13 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
 
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	page = spt_find_page (spt, va);
+
+	ASSERT (page != NULL);
 	return vm_do_claim_page (page);
 }
 
@@ -191,7 +203,8 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	spt_insert_page (spt, page);
 
 	return swap_in (page, frame->kva);
 }
@@ -199,7 +212,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(&spt->table, spt_hash_hash, spt_hash_cmp_va_less, NULL);
+	hash_init (&spt->table, spt_hash_hash, spt_hash_cmp_va_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -232,4 +245,8 @@ static uint64_t
 spt_hash_hash(const struct hash_elem *e, void *aux UNUSED) {
 	struct page *pg = hash_entry (e, struct page, elem);
 	return hash_bytes (&pg->va, sizeof &pg->va);
+}
+
+static void init_frame_table(void) {
+	list_init (&frame_table);
 }
