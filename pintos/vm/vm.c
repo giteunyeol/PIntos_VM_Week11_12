@@ -71,9 +71,11 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
+	void *aligned_va = pg_round_down (va);
+
 	// 임시 탐색용 page
 	struct page temp_pg = {
-		.va = va,
+		.va = aligned_va,
 	};
 
 	struct page *page = hash_entry (hash_find(&spt->table, &temp_pg.elem),
