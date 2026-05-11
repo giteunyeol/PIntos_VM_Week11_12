@@ -64,11 +64,12 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	/* TODO: Fill this function. */
-
-	return page;
+	if(hash_find(spt->pages, va) == NULL) { //해당 원소가 비었으면 NULL리턴
+		return NULL; 
+	}
+	return hash_find(spt->pages, va); //찾은값 리턴 
 }
 
 /* Insert PAGE into spt with validation. */
