@@ -978,6 +978,17 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
+
+	void *va = page->va;
+	DEG_CALL ("page=%p aux=%p va=%p", page, aux, va);
+	bool is_alloced = vm_claim_page (va);
+
+	// 엄 여기서 뭐 더 해야하지???
+	// 그냥 추가 예정인 상태를 spt에 등록하는건데, 그럼 이거면 되는거 아닌가?
+	// 나중에 추가 값 할당이 필요하다면 몰라도?
+
+	DEG_RETURN ("value=%d", is_alloced);
+	return is_alloced;
 }
 
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
@@ -997,15 +1008,15 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	DEG_CALL ("file=%p ofs=%lld upage=%p read_bytes=%u zero_bytes=%u writable=%d",
-			(void *) file, (long long) ofs, (void *) upage, read_bytes, zero_bytes, writable);
+				(void *) file, (long long) ofs, (void *) upage, read_bytes, zero_bytes, writable);
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
 	bool has_page_start = read_bytes > 0 || zero_bytes > 0;
 	DEG_LOOP_START ("read_bytes > 0 || zero_bytes > 0",
-			"value=%d read_bytes=%u zero_bytes=%u",
-			has_page_start, read_bytes, zero_bytes);
+				"value=%d read_bytes=%u zero_bytes=%u",
+				has_page_start, read_bytes, zero_bytes);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		bool has_page_now = read_bytes > 0 || zero_bytes > 0;
 		DEG_LOOP ("read_bytes > 0 || zero_bytes > 0",
@@ -1017,7 +1028,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 		DEG_NOTE ("calc", "page_read_bytes=%zu page_zero_bytes=%zu",
-				page_read_bytes, page_zero_bytes);
+					page_read_bytes, page_zero_bytes);
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;

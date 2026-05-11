@@ -105,11 +105,12 @@ err:
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
 	DEG_CALL ("spt=%p va=%p", (void *) spt, va);
-	void *aligned_va = pg_round_down (va);
+
+	ASSERT ((uintptr_t) va == (uintptr_t) pg_round_down (va)) // must aligned
 
 	// 임시 탐색용 page
 	struct page temp_pg = {
-		.va = aligned_va,
+		.va = va,
 	};
 
 	struct hash_elem *found = hash_find (&spt->table, &temp_pg.elem);
@@ -221,13 +222,22 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	DEG_CALL ("f=%p addr=%p user=%d write=%d not_present=%d",
 				(void *) f, addr, user, write, not_present);
 
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
+	void *va = pg_round_down (addr);
 
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
+	page = spt_find_page (spt, va);
+	bool is_not_found = page == NULL;
 
-	return vm_do_claim_page (page);
+	DEG_BRANCH ("is_not_found", is_not_found);
+	if (is_not_found) {
+		DEG_RETURN ("value=%d", false);
+		return false;
+	}
+
+	bool result = vm_do_claim_page (page);
+	DEG_RETURN ("value=%d", result);
+	return result;
 }
 
 /* Free the page.
