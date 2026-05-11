@@ -49,6 +49,8 @@ struct page {
 
 	struct hash_elem elem; // supplemental_page_table의 요소라는 뜻
 
+	bool writeable;
+
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {

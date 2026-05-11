@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 
 #include "debug_trace.h"
+#include "threads/mmu.h"
 #include "vm/inspect.h"
 
 struct list frame_table; // 관리 주체가 애매해서 일단 vm에 둠.
@@ -96,7 +97,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			break;
 	}
 
-	//TODO: page에 writable 추가
+	new_page->writeable = writable;
 
 	spt_insert_page (spt, new_page);
 
@@ -280,6 +281,10 @@ vm_do_claim_page (struct page *page) {
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
+
+	DEG_NOTE("temp", "page->va=%p frame->kva=%p", page->va, frame->kva);
+	pml4_set_page (thread_current ()->pml4, page->va, frame->kva,
+			page->writeable);
 
 	bool result = swap_in (page, frame->kva);
 	DEG_RETURN ("value=%d page=%p frame=%p kva=%p",
