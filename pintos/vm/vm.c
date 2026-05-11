@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 
 #include "debug_trace.h"
+#include "string.h"
 #include "threads/mmu.h"
 #include "vm/inspect.h"
 
@@ -205,6 +206,8 @@ vm_get_frame (void) {
 	if (need_evict) {
 		PANIC ("todo - need_evict");
 	}
+
+	memset (frame, 0, PGSIZE); // 보안을 위해 0으로 초기화
 
 	// init
 	frame->page = NULL;
