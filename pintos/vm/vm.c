@@ -66,9 +66,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	// TODO: upage가 항상(모든 테스트 케이스) alined 된 상태라면 pg_round_down 제거
 	void *va = pg_round_down (upage);
-	DEG_NOTE ("stat", "upage=%p va=%p", upage, va);
+	//DEG_NOTE ("stat", "upage=%p va=%p", upage, va); //TODO: 나중에 켜서 체크
 
-	DEG_NOTE ("stat", "hash_size=%ld", hash_size(&spt->table));
+	//DEG_NOTE ("stat", "hash_size=%ld", hash_size(&spt->table));
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, va) != NULL) {
@@ -206,6 +206,10 @@ vm_get_frame (void) {
 		PANIC ("todo - need_evict");
 	}
 
+	// init
+	frame->page = NULL;
+	frame->kva = frame;
+
 	list_push_front(&frame_table, &frame->elem); // 새거니까 추가
 
 	ASSERT (frame != NULL);
@@ -285,8 +289,11 @@ vm_do_claim_page (struct page *page) {
 	DEG_NOTE("temp", "page->va=%p frame->kva=%p", page->va, frame->kva);
 	pml4_set_page (thread_current ()->pml4, page->va, frame->kva,
 			page->writeable);
+	DEG_NOTE("here", "0");
 
 	bool result = swap_in (page, frame->kva);
+
+	DEG_NOTE("here", "1");
 	DEG_RETURN ("value=%d page=%p frame=%p kva=%p",
 				result, (void *) page, (void *) frame, frame->kva);
 	return result;
