@@ -82,6 +82,9 @@ spt_insert_page (struct supplemental_page_table *spt,
 	if(page->va == NULL) { //빈 주소값이 들어올 경우, false 리턴
 		return false;
 	}
+	if(spt_find_page(spt->pages, page->va) != NULL) { //중복 검사 구현
+		return false;
+	} 
 	pg_round_down(page->addr); // 주소 수정하기
 	hash_insert(spt->pages, page);
 }
