@@ -380,3 +380,19 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	list_remove (&e->list_elem);
 }
 
+/* 보조 데이터 `AUX`를 바탕으로 해시 원소 `E`의 해시 값을
+ * 계산해 반환한다. */
+//hash_hash_func
+static uint64_t hash_spt(const struct hash_elem *e, void *aux){
+	return hash_int(e);
+}
+
+//hash_less_func
+/* 보조 데이터 `AUX`를 바탕으로 해시 원소 `A`와 `B`의 값을
+ * 비교한다. `A < B`이면 true를, 그렇지 않으면 false를 반환한다. */
+static bool hash_less(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
+	if(hash_spt(&a, aux) < hash_spt(&b, aux)) {
+		return true;
+	}
+	return false;
+}

@@ -3,6 +3,8 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "threads/vaddr.h" //pg_round_down사용을 위함
+#include "lib/kernel/hash.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -71,12 +73,16 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
-	int succ = false;
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
 	/* TODO: Fill this function. */
-
-	return succ;
+	//단위에 맞는 곳으로 넣어야함. 
+	//예외처리부터. 실패하는 경우
+	if(page->va == NULL) { //빈 주소값이 들어올 경우, false 리턴
+		return false;
+	}
+	pg_round_down(page->addr); // 주소 수정하기
+	hash_insert(spt->pages, page);
 }
 
 void
@@ -173,7 +179,8 @@ vm_do_claim_page (struct page *page) {
 
 /* Initialize new supplemental page table */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	hash_init(spt->pages, ); // 해시값 초기화
 }
 
 /* Copy supplemental page table from src to dst */
