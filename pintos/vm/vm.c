@@ -69,7 +69,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	void *rva = pg_round_down(va);
 	struct page target_page;
 	target_page.va = rva;
-	struct hash_elem *elem = hash_find(&spt->pages, &target_page.hash_elem);
+	struct hash_elem *elem = hash_find(&spt->pages, &target_page.hash_elem);	// stp 안에 실제로 들어있던 page의 elem 반환
 
 	if (elem == NULL) {
 		return NULL;
@@ -80,11 +80,11 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 /* 검증을 거쳐 PAGE를 spt에 삽입한다. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 	int succ = false;
-	/* TODO: 이 함수를 채운다. */
-
+	if (!hash_insert(&spt->pages, &page->hash_elem)) {
+		succ = true;
+	}
 	return succ;
 }
 
