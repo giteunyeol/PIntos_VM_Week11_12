@@ -58,18 +58,45 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	DEG_CALL ("type=%d upage=%p writable=%d init=%p aux=%p",
 			type, upage, writable, (void *) init, aux);
 
+	// UNITNIT은 생성 요청 타입으로서 쓸 수 없음. page_get_type() 참고하면 더 이해하기 쉬움
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
-
-		/* TODO: Insert the page into the spt. */
+	if (spt_find_page (spt, upage) != NULL) {
+		PANIC ("page found in vm_alloc_init");
 	}
+
+	struct page *new_page = malloc(sizeof (struct page));
+	if (new_page == NULL) {
+		PANIC ("out of memory - new_page");
+	}
+
+	// TODO: upage가 이미 alined 된 상태라면 pg_round_down 제거
+	void *va = pg_round_down (upage);
+	DEG_NOTE ("stat", "upage=%p va=%p", upage, va);
+
+	switch (VM_TYPE(type)) {
+		case VM_ANON:
+			uninit_new (new_page, va, init, VM_ANON, aux, anon_initializer);
+			break;
+		case VM_FILE:
+			uninit_new (new_page, va, init, VM_FILE, aux, file_backed_initializer);
+			break;
+		#ifdef EFILESYS  /* For project 4 */
+		case VM_PAGE_CACHE:
+			uninit_new (new_page, va, init, VM_PAGE_CACHE, aux, page_cache_initializer);
+			break;
+		#endif
+		default:
+			PANIC ("Unsupported VM Type(%d)", VM_TYPE(type));
+			break;
+	}
+
+	spt_insert_page (spt, new_page);
+
+	return true;
 err:
 	return false;
 }
