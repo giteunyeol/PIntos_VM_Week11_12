@@ -63,8 +63,14 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
+	// TODO: upage가 항상(모든 테스트 케이스) alined 된 상태라면 pg_round_down 제거
+	void *va = pg_round_down (upage);
+	DEG_NOTE ("stat", "upage=%p va=%p", upage, va);
+
+	DEG_NOTE ("hash", "size=%ld", hash_size(&spt->table));
+
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, upage) != NULL) {
+	if (spt_find_page (spt, va) != NULL) {
 		PANIC ("page found in vm_alloc_init");
 	}
 
@@ -72,10 +78,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	if (new_page == NULL) {
 		PANIC ("out of memory - new_page");
 	}
-
-	// TODO: upage가 이미 alined 된 상태라면 pg_round_down 제거
-	void *va = pg_round_down (upage);
-	DEG_NOTE ("stat", "upage=%p va=%p", upage, va);
 
 	switch (VM_TYPE(type)) {
 		case VM_ANON:
@@ -115,8 +117,10 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 	struct hash_elem *found = hash_find (&spt->table, &temp_pg.elem);
 
-	bool is_not_found = found != NULL;
+	bool is_not_found = found == NULL;
+	DEG_BRANCH ("is_not_found", is_not_found);
 	if (is_not_found) {
+		DEG_RETURN ("value=%p", NULL);
 		return NULL;
 	}
 
