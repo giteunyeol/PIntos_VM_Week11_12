@@ -180,7 +180,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(spt->pages, ); // 해시값 초기화
+	hash_init(spt->pages, hash_spt, hash_less, &spt->pages->aux); // 해시값 초기화
 }
 
 /* Copy supplemental page table from src to dst */
