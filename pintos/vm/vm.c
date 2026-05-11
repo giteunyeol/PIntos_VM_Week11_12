@@ -5,8 +5,8 @@
 #include "kernel/hash.h"
 #include "vm/inspect.h"
 
-bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
-uint64_t page_hash(const struct hash_elem *e, void *aux);
+bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+uint64_t page_hash(const struct hash_elem *e, void *aux UNUSED);
 
 /* 각 하위 시스템의 초기화 코드를 호출해 가상 메모리 하위 시스템을
  * 초기화한다. */
@@ -65,11 +65,17 @@ err:
 
 /* spt에서 VA에 해당하는 page를 찾아 반환한다. 실패하면 NULL을 반환한다. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: 이 함수를 채운다. */
+spt_find_page (struct supplemental_page_table *spt, void *va) {
+	void *rva = pg_round_down(va);
+	struct page target_page;
+	target_page.va = rva;
+	struct hash_elem *elem = hash_find(&spt->pages, &target_page.hash_elem);
 
-	return page;
+	if (elem == NULL) {
+		return NULL;
+	} else {
+		return hash_entry(elem, struct page, hash_elem);
+	}
 }
 
 /* 검증을 거쳐 PAGE를 spt에 삽입한다. */
@@ -193,12 +199,12 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	 * TODO: 수정된 모든 내용을 저장소에 다시 기록한다. */
 }
 
-uint64_t page_hash(const struct hash_elem *e, void *aux) {
+uint64_t page_hash(const struct hash_elem *e, void *aux UNUSED) {
 	struct page *page = hash_entry(e, struct page, hash_elem);
 	return hash_bytes(&page->va, sizeof page->va);
 }
 
-bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
+bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
 	struct page *pa = hash_entry(a, struct page, hash_elem);
 	struct page *pb = hash_entry(b, struct page, hash_elem);
 
