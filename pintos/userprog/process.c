@@ -759,6 +759,8 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
+	DEG_NOTE ("here", "before setup_stack");
+
 	/* 스택을 설정한다. */
 	if (!setup_stack (if_))
 		goto done;
@@ -817,6 +819,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	t->exec_file = file;
 	file = NULL;
 
+	DEG_NOTE ("here", "before label done");
 done:
 	/* We arrive here whether the load is successful or not. */
 	if (!success && file != NULL) {
@@ -1056,14 +1059,32 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* USER_STACK에 스택 페이지를 만든다. 성공하면 true를 반환한다. */
 static bool
 setup_stack (struct intr_frame *if_) {
-	bool success = false;
-	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
 	/* TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 점유한다.
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다. */
-	/* TODO: 여기에 코드를 작성한다. */
+	DEG_CALL("if_=%p", if_);
 
-	return success;
+	bool is_success = false;
+	bool writable = true;
+	// 이게 스택이라 할당 주소가 이게 맞나 깊긴 한데 암튼.
+	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	DEG_NOTE ("stat", "USER_STACK=%p stack_bottom=%p", USER_STACK, stack_bottom);
+
+	/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
+	void *aux = NULL;
+	if (!vm_alloc_page_with_initializer (VM_ANON, stack_bottom,
+			writable, lazy_load_segment, aux)) {
+		goto done;
+	}
+	if (!vm_claim_page (stack_bottom)) {
+		goto done;
+	}
+	is_success = true;
+	if_->rsp = USER_STACK;
+
+	DEG_NOTE ("here", "before label - done");
+done:
+	DEG_RETURN ("value=%d", is_success);
+	return is_success;
 }
 #endif /* VM */

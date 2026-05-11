@@ -67,7 +67,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	void *va = pg_round_down (upage);
 	DEG_NOTE ("stat", "upage=%p va=%p", upage, va);
 
-	DEG_NOTE ("hash", "size=%ld", hash_size(&spt->table));
+	DEG_NOTE ("stat", "hash_size=%ld", hash_size(&spt->table));
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, va) != NULL) {
@@ -96,10 +96,14 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			break;
 	}
 
+	//TODO: page에 writable 추가
+
 	spt_insert_page (spt, new_page);
 
+	DEG_RETURN ("value=true");
 	return true;
 err:
+	DEG_RETURN ("value=false");
 	return false;
 }
 
@@ -276,9 +280,6 @@ vm_do_claim_page (struct page *page) {
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
-
-	struct supplemental_page_table *spt = &thread_current ()->spt;
-	spt_insert_page (spt, page);
 
 	bool result = swap_in (page, frame->kva);
 	DEG_RETURN ("value=%d page=%p frame=%p kva=%p",
