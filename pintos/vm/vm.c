@@ -37,7 +37,7 @@ page_get_type (struct page *page) {
 /* Helpers */
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
-static struct frame *vm_evict_frame (void);
+static struct frame *vm_evict_frame (void); 
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -91,6 +91,7 @@ spt_insert_page (struct supplemental_page_table *spt,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	hash_delete(&spt->pages, &page->hash_elem);
 	vm_dealloc_page (page);
 	return true;
 }
@@ -195,7 +196,12 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+//spt의 hash초기화
+static void supplemental_page_table_init(struct supplemental_page_table *spt) {
+	hash_init(spt->pages, hash_spt, hash_less, spt->pages->aux);
 }
