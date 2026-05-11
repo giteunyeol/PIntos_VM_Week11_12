@@ -27,7 +27,8 @@
 
 /* 해시 원소. */
 struct hash_elem {
-	struct list_elem list_elem;
+	struct list_elem spt_elem;
+	struct list_elem frame_elem;
 };
 
 /* 해시 원소 `HASH_ELEM` 포인터를, 그것을 포함하는 구조체의
