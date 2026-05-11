@@ -5,6 +5,9 @@
 #include "kernel/hash.h"
 #include "vm/inspect.h"
 
+bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
+uint64_t page_hash(const struct hash_elem *e, void *aux);
+
 /* 각 하위 시스템의 초기화 코드를 호출해 가상 메모리 하위 시스템을
  * 초기화한다. */
 void
@@ -174,7 +177,7 @@ vm_do_claim_page (struct page *page) {
 /* 새 supplemental page table을 초기화한다. */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(&spt->pages, pages->hash, pages->less, NULL);
+	hash_init(&spt->pages, page_hash, page_less, NULL);
 }
 
 /* src의 supplemental page table을 dst로 복사한다. */
@@ -188,4 +191,16 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: thread가 보유한 모든 supplemental_page_table을 파괴하고,
 	 * TODO: 수정된 모든 내용을 저장소에 다시 기록한다. */
+}
+
+uint64_t page_hash(const struct hash_elem *e, void *aux) {
+	struct page *page = hash_entry(e, struct page, hash_elem);
+	return hash_bytes(&page->va, sizeof page->va);
+}
+
+bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
+	struct page *pa = hash_entry(a, struct page, hash_elem);
+	struct page *pb = hash_entry(b, struct page, hash_elem);
+
+	return pa->va < pb->va;
 }
