@@ -67,9 +67,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	// TODO: upage가 항상(모든 테스트 케이스) alined 된 상태라면 pg_round_down 제거
 	void *va = pg_round_down (upage);
-	//DEG_NOTE ("stat", "upage=%p va=%p", upage, va); //TODO: 나중에 켜서 체크
+	DEG_NOTE ("stat", "upage=%p va=%p", upage, va); //TODO: 나중에 켜서 체크
 
-	//DEG_NOTE ("stat", "hash_size=%ld", hash_size(&spt->table));
+	DEG_NOTE ("stat", "hash_size=%ld", hash_size(&spt->table));
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, va) != NULL) {

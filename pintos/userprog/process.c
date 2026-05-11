@@ -1022,16 +1022,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 				has_page_start, read_bytes, zero_bytes);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		bool has_page_now = read_bytes > 0 || zero_bytes > 0;
-		// DEG_LOOP ("read_bytes > 0 || zero_bytes > 0",
-		// 		"value=%d upage=%p read_bytes=%u zero_bytes=%u",
-		// 		has_page_now, upage, read_bytes, zero_bytes);
+		DEG_LOOP ("read_bytes > 0 || zero_bytes > 0",
+				"value=%d upage=%p read_bytes=%u zero_bytes=%u",
+				has_page_now, upage, read_bytes, zero_bytes);
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-		// DEG_NOTE ("calc", "page_read_bytes=%zu page_zero_bytes=%zu",
-		// 			page_read_bytes, page_zero_bytes);
+		DEG_NOTE ("calc", "page_read_bytes=%zu page_zero_bytes=%zu",
+					page_read_bytes, page_zero_bytes);
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		void *aux = NULL;
