@@ -167,7 +167,12 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
+	struct thread *cur = thread_current();
 	/* TODO: 이 함수를 채운다. */
+	page = spt_find_page(&cur->spt, va);
+	if (page == NULL) {
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
