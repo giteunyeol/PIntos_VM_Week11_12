@@ -13,6 +13,7 @@ struct list frame_table; // 관리 주체가 애매해서 일단 vm에 둠.
 static bool spt_hash_cmp_va_less(const struct hash_elem *a,
 		const struct hash_elem *b, void *aux UNUSED);
 static uint64_t spt_hash_hash(const struct hash_elem *e, void *aux UNUSED);
+static void destroy_spt_item (struct hash_elem *e, void *aux UNUSED);
 static void init_frame_table(void);
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -315,19 +316,35 @@ bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src) {
 	DEG_CALL ("dst=%p src=%p", (void *) dst, (void *) src);
-	// TODO: 프로세스와 page의 관계나 그런게 아직 확실하게 생각나지 않음.
-	// fork, exit 등으로 2개 이상에서 동일한 page를 볼 수 있고, 제거할 때도 고민되는데
-	// ref cnt가 지금 당장 생각하기에는 확실한 후보인데 구현 하면서 바뀔 수 있어서 구현 미룸
-	// kill도 마찬가지
-	DEG_RETURN ("value=false");
-	return false;
+	struct hash_iterator i;
+
+	// 동일한 user vaddr을 가지는 frame 복사해서 생성
+	hash_first (&i, &src->table);
+	while (hash_next (&i)) {
+		struct page *src_page = hash_entry (hash_cur (&i), struct page, elem);
+		void *uva = src_page->va; // 둘 다 동일한 user virtual addr을 공유
+		vm_alloc_page (VM_ANON, uva, src_page->writeable);
+		struct page *dst_page = spt_find_page (dst, uva);
+		ASSERT (dst_page != NULL); // must exists;
+
+		bool has_src_frame = src_page->frame != NULL;
+		if (has_src_frame) {
+			vm_claim_page (uva);
+			memcpy (dst_page->frame, src_page->frame, PGSIZE);
+		}
+	}
+	DEG_RETURN ("value=true");
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
+	DEG_CALL ("spt=%p", (void *) spt);
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_destroy (&spt->table, destroy_spt_item);
+	DEG_RETURN ("void");
 }
 
 static bool
@@ -343,6 +360,18 @@ static uint64_t
 spt_hash_hash(const struct hash_elem *e, void *aux UNUSED) {
 	struct page *pg = hash_entry (e, struct page, elem);
 	return hash_bytes (&pg->va, sizeof &pg->va);
+}
+
+static void
+destroy_spt_item (struct hash_elem *e, void *aux UNUSED) {
+	//TODO: 나중에는 이거 ref cnt로 바뀔수도?
+	struct page *page = hash_entry (e, struct page, elem);
+	destroy (page);
+	if (page->frame != NULL) {
+		free (page->frame);
+		list_remove(&page->frame->elem); // frame 할당 푸니까 제거
+	}
+	free (page);
 }
 
 static void init_frame_table(void) {
