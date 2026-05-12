@@ -57,6 +57,13 @@ struct initd_aux {
 	struct child_status *child_status;
 };
 
+struct lazy_load_aux {
+	struct file *file;
+	off_t ofs;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
+
 /* initd와 그 외 프로세스에서 공통으로 사용하는 초기화 함수. */
 static void
 process_init (void) {
@@ -977,21 +984,37 @@ install_page (void *upage, void *kpage, bool writable) {
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
 static bool
-lazy_load_segment (struct page *page, void *aux) {
+lazy_load_segment (struct page *page, void *aux_) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
+	struct lazy_load_aux *aux = aux_;
+	DEG_CALL ("page=%p aux=%p va=%p", page, aux_, page->va);
 
-	void *va = page->va;
-	DEG_CALL ("page=%p aux=%p va=%p", page, aux, va);
-	bool is_alloced = vm_claim_page (va);
+	if (vm_claim_page (page->va)) {
+		PANIC ("FAIL in vm_claim_page");
+		// spt_remove_page (spt, page); // TODO: 이거 꼭 필요한가? 그냥 ASSERT로 터져야 하는거 아닌가?
+		// free (aux);
+		// DEG_RETURN ("value=false cause=vm_claim_page");
+	}
 
-	// 엄 여기서 뭐 더 해야하지???
-	// 그냥 추가 예정인 상태를 spt에 등록하는건데, 그럼 이거면 되는거 아닌가?
-	// 나중에 추가 값 할당이 필요하다면 몰라도?
+	struct file *file = aux->file;
+	off_t ofs = aux->ofs;
+	uint8_t *kpage = page->frame->kva;
+	uint32_t page_read_bytes = aux->read_bytes;
+	uint32_t page_zero_bytes = aux->zero_bytes;
+	file_seek (file, ofs);
+	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		PANIC ("FAIL in file_read");
+		// free (aux); // 아직 할당된거 없으니까 이거만 하면 됨
+		// DEG_RETURN ("value=false cause=file_read");
+		// return false;
+	}
 
-	DEG_RETURN ("value=%d", is_alloced);
-	return is_alloced;
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+	free (aux);
+	DEG_RETURN ("value=true");
+	return true;
 }
 
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
@@ -1022,24 +1045,25 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 				has_page_start, read_bytes, zero_bytes);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		bool has_page_now = read_bytes > 0 || zero_bytes > 0;
-		DEG_LOOP ("read_bytes > 0 || zero_bytes > 0",
-				"value=%d upage=%p read_bytes=%u zero_bytes=%u",
-				has_page_now, upage, read_bytes, zero_bytes);
+		DEG_LOOP ("has_page_now",
+				"value=%d upage=%p read_bytes=%u zero_bytes=%u, ofs=%d",
+				has_page_now, upage, read_bytes, zero_bytes, ofs);
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-		DEG_NOTE ("calc", "page_read_bytes=%zu page_zero_bytes=%zu",
-					page_read_bytes, page_zero_bytes);
 
-		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
-		void *aux = NULL;
-		bool is_init_failed = !vm_alloc_page_with_initializer (VM_ANON, upage,
-				writable, lazy_load_segment, aux);
-		DEG_BRANCH ("is_init_failed", is_init_failed);
-		if (is_init_failed) {
-			DEG_RETURN ("value=false");
+		struct lazy_load_aux *aux = malloc (sizeof *aux);
+		ASSERT(aux != NULL); // 일단 검증
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
+					lazy_load_segment, aux)) {
+			//TODO: 이것도 꼭 해야하나 싶긴 함. 실패하는걸 고려해야하나? 일단은 안하고 나중에...
+			DEG_RETURN ("value=false cause=vm_alloc_page_with_init");
 			return false;
 		}
 
@@ -1047,6 +1071,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	bool has_page_end = read_bytes > 0 || zero_bytes > 0;
 	DEG_LOOP_END ("read_bytes > 0 || zero_bytes > 0",

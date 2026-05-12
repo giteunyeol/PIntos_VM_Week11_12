@@ -317,14 +317,18 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	while (hash_next (&i)) {
 		struct page *src_page = hash_entry (hash_cur (&i), struct page, elem);
 		void *uva = src_page->va; // 둘 다 동일한 user virtual addr을 공유
-		vm_alloc_page (VM_ANON, uva, src_page->writeable);
+		//TODO: with_init 이 필요할지도? 왜냐면 uninit인 경우 lazy_load 가 필요할 수 있음
+		// uninit인 경우를 고려해서 분기 처리가 필요할수도?
+		// 근데 그건 해당 영역이 세그먼트인 경우만 포함되는데? 그러면 page 타입에 따라 page 내용 자체를 복사하고,
+		// frame만 새로 생성해야 할 수도?
+		vm_alloc_page (page_get_type (src_page), uva, src_page->writeable);
 		struct page *dst_page = spt_find_page (dst, uva);
-		ASSERT (dst_page != NULL); // must exists;
+		ASSERT (dst_page != NULL); // must exists
 
 		bool has_src_frame = src_page->frame != NULL;
 		if (has_src_frame) {
 			vm_claim_page (uva);
-			memcpy (dst_page->frame, src_page->frame, PGSIZE);
+			memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
 		}
 	}
 	DEG_RETURN ("value=true");
