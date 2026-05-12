@@ -300,7 +300,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	DEG_CALL ("spt=%p", (void *) spt);
+	DEG_CALL ("init spt=%p", (void *) spt);
 	hash_init (&spt->table, spt_hash_hash, spt_hash_cmp_va_less, NULL);
 	DEG_RETURN ("void");
 }
@@ -309,7 +309,7 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src) {
-	DEG_CALL ("dst=%p src=%p", (void *) dst, (void *) src);
+	DEG_CALL ("copy dst=%p src=%p", (void *) dst, (void *) src);
 	struct hash_iterator i;
 
 	// 동일한 user vaddr을 가지는 frame 복사해서 생성
@@ -334,7 +334,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt) {
-	DEG_CALL ("spt=%p", (void *) spt);
+	DEG_CALL ("kill spt=%p", (void *) spt);
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
 	hash_destroy (&spt->table, spt_hash_destroy_item);
