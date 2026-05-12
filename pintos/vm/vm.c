@@ -13,7 +13,8 @@ struct list frame_table; // 관리 주체가 애매해서 일단 vm에 둠.
 static bool spt_hash_cmp_va_less(const struct hash_elem *a,
 		const struct hash_elem *b, void *aux UNUSED);
 static uint64_t spt_hash_hash(const struct hash_elem *e, void *aux UNUSED);
-static void destroy_spt_item (struct hash_elem *e, void *aux UNUSED);
+static void spt_hash_destroy_item (struct hash_elem *e, void *aux UNUSED);
+static void destroy_frame_if_exists(struct page *page);
 static void init_frame_table(void);
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -61,19 +62,14 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	DEG_CALL ("type=%d upage=%p writable=%d init=%p aux=%p",
 			type, upage, writable, (void *) init, aux);
 
+	ASSERT (pg_round_down (upage) == upage);
 	// UNITNIT은 생성 요청 타입으로서 쓸 수 없음. page_get_type() 참고하면 더 이해하기 쉬움
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
-	// TODO: upage가 항상(모든 테스트 케이스) alined 된 상태라면 pg_round_down 제거
-	void *va = pg_round_down (upage);
-	DEG_NOTE ("stat", "upage=%p va=%p", upage, va); //TODO: 나중에 켜서 체크
-
-	DEG_NOTE ("stat", "hash_size=%ld", hash_size(&spt->table));
-
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, va) != NULL) {
+	if (spt_find_page (spt, upage) != NULL) {
 		PANIC ("page found in vm_alloc_init");
 	}
 
@@ -84,14 +80,14 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	switch (VM_TYPE(type)) {
 		case VM_ANON:
-			uninit_new (new_page, va, init, VM_ANON, aux, anon_initializer);
+			uninit_new (new_page, upage, init, VM_ANON, aux, anon_initializer);
 			break;
 		case VM_FILE:
-			uninit_new (new_page, va, init, VM_FILE, aux, file_backed_initializer);
+			uninit_new (new_page, upage, init, VM_FILE, aux, file_backed_initializer);
 			break;
 		#ifdef EFILESYS  /* For project 4 */
 		case VM_PAGE_CACHE:
-			uninit_new (new_page, va, init, VM_PAGE_CACHE, aux, page_cache_initializer);
+			uninit_new (new_page, upage, init, VM_PAGE_CACHE, aux, page_cache_initializer);
 			break;
 		#endif
 		default:
@@ -165,9 +161,10 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	struct hash_elem *found = hash_delete (&spt->table, &page->elem);
 
 	//TODO: 나중에 요소 없는 경우도 지원해야 하면 ASSERT 지우고 early return 추가
-	bool is_not_found = found != NULL;
-	ASSERT (!is_not_found);
+	bool is_found = found != NULL;
+	ASSERT (is_found);
 
+	destroy_frame_if_exists (page);
 	vm_dealloc_page (page);
 
 	DEG_RETURN ("void");
@@ -290,14 +287,11 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	DEG_NOTE("temp", "page->va=%p frame->kva=%p", page->va, frame->kva);
 	pml4_set_page (thread_current ()->pml4, page->va, frame->kva,
 			page->writeable);
-	DEG_NOTE("here", "0");
 
 	bool result = swap_in (page, frame->kva);
 
-	DEG_NOTE("here", "1");
 	DEG_RETURN ("value=%d page=%p frame=%p kva=%p",
 				result, (void *) page, (void *) frame, frame->kva);
 	return result;
@@ -343,7 +337,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	DEG_CALL ("spt=%p", (void *) spt);
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	hash_destroy (&spt->table, destroy_spt_item);
+	hash_destroy (&spt->table, spt_hash_destroy_item);
 	DEG_RETURN ("void");
 }
 
@@ -363,19 +357,24 @@ spt_hash_hash(const struct hash_elem *e, void *aux UNUSED) {
 }
 
 static void
-destroy_spt_item (struct hash_elem *e, void *aux UNUSED) {
+spt_hash_destroy_item (struct hash_elem *e, void *aux UNUSED) {
 	//TODO: 나중에는 이거 ref cnt로 바뀔수도?
 	struct page *page = hash_entry (e, struct page, elem);
-	destroy (page); // union으로 관리되는 type 별 데이터의 destroy
-	if (page->frame != NULL) {
-		free (page->frame);
-		list_remove(&page->frame->elem); // frame 할당 푸니까 제거
-	}
-	free (page);
+	destroy_frame_if_exists (page);
+	vm_dealloc_page (page);
 }
 
 static void init_frame_table(void) {
 	DEG_CALL ("frame_table=%p", (void *) &frame_table);
 	list_init (&frame_table);
 	DEG_RETURN ("void");
+}
+
+static void
+destroy_frame_if_exists(struct page* page) {
+	if (page->frame != NULL) {
+		list_remove(&page->frame->elem);
+		pml4_clear_page (thread_current ()->pml4, page->va);
+		palloc_free_page (page->frame);
+	}
 }
