@@ -991,7 +991,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 	struct lazy_load_aux *aux = aux_;
 	DEG_CALL ("page=%p aux=%p va=%p", page, aux_, page->va);
 
-	if (vm_claim_page (page->va)) {
+	if (!vm_claim_page (page->va)) {
 		PANIC ("FAIL in vm_claim_page");
 		// spt_remove_page (spt, page); // TODO: 이거 꼭 필요한가? 그냥 ASSERT로 터져야 하는거 아닌가?
 		// free (aux);

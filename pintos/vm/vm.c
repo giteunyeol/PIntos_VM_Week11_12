@@ -164,9 +164,7 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	bool is_found = found != NULL;
 	ASSERT (is_found);
 
-	destroy_frame_if_exists (page);
-	vm_dealloc_page (page);
-
+	spt_hash_destroy_item (found, NULL);
 	DEG_RETURN ("void");
 }
 
@@ -196,22 +194,21 @@ vm_evict_frame (void) {
 static struct frame *
 vm_get_frame (void) {
 	DEG_CALL ("void");
-	struct frame *frame = NULL;
 
-	frame = palloc_get_page (PAL_USER);
-
-	bool need_evict = frame == NULL;
-	if (need_evict) {
+	void *kva = palloc_get_page (PAL_USER);
+	if (kva == NULL) {
 		PANIC ("todo - need_evict");
 	}
 
-	memset (frame, 0, PGSIZE); // 보안을 위해 0으로 초기화
+	struct frame *frame = malloc (sizeof (struct frame));
+	if (frame == NULL) {
+		PANIC ("out of memory - frame");
+	}
 
-	// init
+	frame->kva = kva;
 	frame->page = NULL;
-	frame->kva = frame;
 
-	list_push_front(&frame_table, &frame->elem); // 새거니까 추가
+	memset (frame->kva, 0, PGSIZE); // 보안을 위해 0으로 초기화
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -282,6 +279,7 @@ static bool
 vm_do_claim_page (struct page *page) {
 	DEG_CALL ("page=%p va=%p", (void *) page, page != NULL ? page->va : NULL);
 	struct frame *frame = vm_get_frame ();
+	list_push_back(&frame_table, &frame->elem); // 새거니까 추가
 
 	/* Set links */
 	frame->page = page;
@@ -292,9 +290,9 @@ vm_do_claim_page (struct page *page) {
 
 	bool result = swap_in (page, frame->kva);
 
-	DEG_RETURN ("value=%d page=%p frame=%p kva=%p",
-				result, (void *) page, (void *) frame, frame->kva);
-	return result;
+	DEG_RETURN ("value=%d result=%d page=%p frame=%p kva=%p",
+				false, result, (void *) page, (void *) frame, frame->kva);
+	return true;
 }
 
 /* Initialize new supplemental page table */
@@ -379,6 +377,7 @@ destroy_frame_if_exists(struct page* page) {
 	if (page->frame != NULL) {
 		list_remove(&page->frame->elem);
 		pml4_clear_page (thread_current ()->pml4, page->va);
-		palloc_free_page (page->frame);
+		palloc_free_page (page->frame->kva);
+		free (page->frame);
 	}
 }
