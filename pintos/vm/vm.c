@@ -90,8 +90,10 @@ spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	vm_dealloc_page (page);
-	return true;
+	if (hash_delete(&spt->pages, &page->hash_elem)) {
+		vm_dealloc_page(page);
+	}
+	return;
 }
 
 /* 교체(evict)할 struct frame을 얻는다. */
@@ -119,8 +121,12 @@ vm_evict_frame (void) {
  * 메모리 공간을 확보한다. */
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
-	/* TODO: 이 함수를 채운다. */
+	struct frame *frame = malloc(sizeof (struct frame));
+	if (frame == NULL) {
+		PANIC("todo");
+	}
+	frame->kva = palloc_get_page(PAL_USER);
+	frame->page = NULL;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
