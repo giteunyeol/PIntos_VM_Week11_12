@@ -57,13 +57,6 @@ struct initd_aux {
 	struct child_status *child_status;
 };
 
-struct lazy_load_aux {
-	struct file *file;
-	off_t ofs;
-	size_t read_bytes;
-	size_t zero_bytes;
-};
-
 /* initd와 그 외 프로세스에서 공통으로 사용하는 초기화 함수. */
 static void
 process_init (void) {
@@ -988,7 +981,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
-	struct lazy_load_aux *aux = aux_;
+	struct page_lazy_load_aux *aux = aux_;
 	DEG_CALL ("page=%p aux=%p va=%p", page, aux_, page->va);
 
 	if (!vm_claim_page (page->va)) {
@@ -1054,7 +1047,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		struct lazy_load_aux *aux = malloc (sizeof *aux);
+		struct page_lazy_load_aux *aux = malloc (sizeof *aux);
 		ASSERT(aux != NULL); // 일단 검증
 		aux->file = file;
 		aux->ofs = ofs;

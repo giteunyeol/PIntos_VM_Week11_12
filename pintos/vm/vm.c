@@ -1,6 +1,7 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
+#include "userprog/process.h"
 #include "vm/vm.h"
 
 #include "debug_trace.h"
@@ -310,25 +311,38 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	DEG_CALL ("copy dst=%p src=%p", (void *) dst, (void *) src);
 	struct hash_iterator i;
 
-	// 동일한 user vaddr을 가지는 frame 복사해서 생성
 	hash_first (&i, &src->table);
 	while (hash_next (&i)) {
 		struct page *src_page = hash_entry (hash_cur (&i), struct page, elem);
 		void *uva = src_page->va; // 둘 다 동일한 user virtual addr을 공유
 
-		// 생성 타입이 아니라 현재의 타입(상태,구조체?)를 가져옴
 		bool is_uninit = VM_TYPE (src_page->operations->type) == VM_UNINIT;
 
 		if (is_uninit) {
-			vm_alloc_page_with_initializer(page_get_type(src_page), uva,
-			        src_page->writeable, src_page->uninit.init, src_page->uninit.aux);
+			// uninit 상태이므로 page만 복사 (깊은 복사)
+
+			//TODO: 나중에 aux 타입 바뀔 수 있으면 어떻게 할지 생각해봐야 함
+			struct page_lazy_load_aux *src_aux = src_page->uninit.aux;
+			struct page_lazy_load_aux *dst_aux = malloc (sizeof (struct page_lazy_load_aux));
+			ASSERT (dst_aux != NULL);
+
+			memcpy (dst_aux, src_aux, sizeof *src_aux);
+
+			vm_alloc_page_with_initializer (page_get_type (src_page), uva,
+					src_page->writeable, src_page->uninit.init, dst_aux);
 		} else {
-			vm_alloc_page(page_get_type (src_page), uva, src_page->writeable);
-			vm_claim_page(uva);
-			struct page* dst_page = spt_find_page(dst, uva);
-			ASSERT(dst_page != NULL);
-			// must exists
-			memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+			// page와 매핑된 frame까지 새로 만들어서 데이터 복사
+			ASSERT (src_page->frame != NULL);
+			void *src_kva = src_page->frame->kva;
+
+			vm_alloc_page (page_get_type (src_page), uva, src_page->writeable);
+			vm_claim_page (uva);
+			struct page *dst_page = spt_find_page (dst, uva);
+
+			ASSERT (dst_page != NULL);
+			ASSERT (dst_page->frame != NULL);
+			void *dst_kva = dst_page->frame->kva;
+			memcpy (dst_kva, src_kva, PGSIZE);
 		}
 	}
 	DEG_RETURN ("value=true");
