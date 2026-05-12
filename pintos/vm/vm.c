@@ -366,7 +366,7 @@ static void
 destroy_spt_item (struct hash_elem *e, void *aux UNUSED) {
 	//TODO: 나중에는 이거 ref cnt로 바뀔수도?
 	struct page *page = hash_entry (e, struct page, elem);
-	destroy (page);
+	destroy (page); // union으로 관리되는 type 별 데이터의 destroy
 	if (page->frame != NULL) {
 		free (page->frame);
 		list_remove(&page->frame->elem); // frame 할당 푸니까 제거
