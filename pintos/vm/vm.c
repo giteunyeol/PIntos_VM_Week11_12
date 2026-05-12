@@ -325,20 +325,19 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 		ASSERT (dst_page != NULL); // must exists
 
 		enum vm_type src_cur_type = VM_TYPE (src_page->operations->type);
-		enum vm_type src_type = page_get_type (src_page);
+		void *aux;
 		switch (src_cur_type) {
 			case VM_ANON:
-				uninit_new (dst_page, uva, src_page->uninit.init, src_type,
-						src_page->uninit.aux, src_page->uninit.page_initializer);
+				aux = src_page->uninit.aux;
 				break;
 			case VM_FILE:
-				vm_file_init()
+				PANIC ("IDK WTD");
 				break;
-			#ifdef EFILESYS  /* For project 4 */
+		#ifdef EFILESYS  /* For project 4 */
 			case VM_PAGE_CACHE:
-				PANIC ("NOT NOW");
+				PANIC ("IDK WTD");
 				break;
-			#endif
+		#endif
 			default:
 				PANIC ("Unsupported VM Type(%d)", src_cur_type);
 				break;
@@ -346,8 +345,12 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 
 		bool has_src_frame = src_cur_type != VM_ANON;
 		if (has_src_frame) {
+			vm_alloc_page (page_get_type (src_page), uva, src_page->writeable);
 			vm_claim_page (uva);
 			memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+		} else {
+			vm_alloc_page_with_initializer (page_get_type (src_page), uva,
+					src_page->writeable, src_page->operations->swap_in, aux);
 		}
 	}
 	DEG_RETURN ("value=true");
