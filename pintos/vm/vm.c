@@ -165,7 +165,7 @@ vm_dealloc_page (struct page *page) {
 
 /* VA에 할당된 page를 claim한다. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: 이 함수를 채운다. */
 
@@ -175,6 +175,7 @@ vm_claim_page (void *va UNUSED) {
 /* PAGE를 claim하고 MMU를 설정한다. */
 static bool
 vm_do_claim_page (struct page *page) {
+	struct thread *cur = thread_current();
 	struct frame *frame = vm_get_frame ();
 
 	/* 연결 관계를 설정한다. */
@@ -182,7 +183,9 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: page의 VA를 frame의 PA에 매핑하도록 page table entry를 삽입한다. */
-
+	if (!pml4_set_page(cur->pml4, page->va, frame->kva, page->writable)) {
+		return false;
+	}
 	return swap_in (page, frame->kva);
 }
 

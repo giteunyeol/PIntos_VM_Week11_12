@@ -46,6 +46,7 @@ struct page {
 	void *va;              /* 사용자 공간 기준 주소 */
 	struct frame *frame;   /* 연결된 frame을 가리키는 역참조 */
 	struct hash_elem hash_elem;
+	bool writable;
 
 	/* 구현할 내용 */
 
