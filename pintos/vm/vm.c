@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "kernel/hash.h"
 #include "vm/inspect.h"
+#include "threads/vaddr.h"
 
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 uint64_t page_hash(const struct hash_elem *e, void *aux UNUSED);
@@ -50,14 +51,33 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
 	/* upage가 이미 사용 중인지 확인한다. */
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: page를 만들고, VM 타입에 맞는 initializer를 가져온 뒤,
 		 * TODO: uninit_new를 호출해 "uninit" page 구조체를 만든다.
 		 * TODO: uninit_new 호출 이후에는 필요한 필드를 수정해야 한다. */
-
+		struct page *page = malloc(sizeof (struct page));
+		if (page == NULL) {
+			return false;
+		}
+		bool (*initializer)(struct page *, enum vm_type, void *);
+		if (VM_TYPE(type) == VM_ANON) {
+			initializer = anon_initializer;
+		} else if (VM_TYPE(type) == VM_FILE) {
+			initializer = file_backed_initializer;
+		} else {
+			free(page);
+			return false;
+		}
+		uninit_new(page, upage, init, type, aux, initializer);
+		page->writable = writable;
 		/* TODO: page를 spt에 삽입한다. */
+		if (spt_insert_page(spt, page)) {
+			return true;
+		} else {
+			free(page);
+			return false;
+		}
 	}
 err:
 	return false;
