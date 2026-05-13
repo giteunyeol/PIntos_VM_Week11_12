@@ -327,7 +327,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			ASSERT (dst_aux != NULL);
 
 			memcpy (dst_aux, src_aux, sizeof *src_aux);
-			dst_aux->file = file_duplicate (src_aux->file); // 파일같은 포인터는 따로 복사
+			// aux의 file은 load() 에서 이미 복사되어있는 상태라서 처리 필요 없음.
 			ASSERT(dst_aux->file != NULL);
 
 			vm_alloc_page_with_initializer (page_get_type (src_page), uva,
