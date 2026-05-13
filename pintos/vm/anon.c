@@ -42,10 +42,8 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 static bool
 anon_swap_in(struct page *page, void *kva)
 {
+	ASSERT(page != NULL);
 	struct anon_page *anon_page = &page->anon;
-	if (anon_page == NULL) {
-		return false;
-	}
 	return true;
 }
 
@@ -53,10 +51,8 @@ anon_swap_in(struct page *page, void *kva)
 static bool
 anon_swap_out(struct page *page)
 {
+	ASSERT(page != NULL);
 	struct anon_page *anon_page = &page->anon;
-	if (anon_page == NULL) {
-		return false;
-	}
 	return true;
 }
 
@@ -64,6 +60,7 @@ anon_swap_out(struct page *page)
 static void
 anon_destroy(struct page *page)
 {
+	ASSERT(page != NULL);
 	struct anon_page *anon_page = &page->anon;
 	return;
 }

@@ -1,9 +1,16 @@
 #ifndef VM_UNINIT_H
 #define VM_UNINIT_H
 #include "vm/vm.h"
+#include "vm/file.h"
 
 struct page;
 enum vm_type;
+struct aux {
+	struct file *file;
+	off_t offset;
+	int read_bytes;
+	int zero_bytes;
+};
 
 typedef bool vm_initializer (struct page *, void *aux);
 
