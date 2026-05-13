@@ -1,15 +1,15 @@
-/* anon.c: Implementation of page for non-disk image (a.k.a. anonymous page). */
+/* anon.c: 비디스크 이미지 페이지의 구현 (익명 페이지라고도 함). */
 
 #include "vm/vm.h"
 #include "devices/disk.h"
 
-/* DO NOT MODIFY BELOW LINE */
+/* 아래 줄을 수정하지 마시오 */
 static struct disk *swap_disk;
-static bool anon_swap_in (struct page *page, void *kva);
-static bool anon_swap_out (struct page *page);
-static void anon_destroy (struct page *page);
+static bool anon_swap_in(struct page *page, void *kva);
+static bool anon_swap_out(struct page *page);
+static void anon_destroy(struct page *page);
 
-/* DO NOT MODIFY this struct */
+/* 이 구조체를 수정하지 마시오 */
 static const struct page_operations anon_ops = {
 	.swap_in = anon_swap_in,
 	.swap_out = anon_swap_out,
@@ -17,36 +17,50 @@ static const struct page_operations anon_ops = {
 	.type = VM_ANON,
 };
 
-/* Initialize the data for anonymous pages */
-void
-vm_anon_init (void) {
-	/* TODO: Set up the swap_disk. */
+/* 익명 페이지의 데이터 초기화 */
+void vm_anon_init(void)
+{
+	/* TODO: swap_disk를 설정하시오. */
 	swap_disk = NULL;
 }
 
-/* Initialize the file mapping */
-bool
-anon_initializer (struct page *page, enum vm_type type, void *kva) {
-	/* Set up the handler */
+/* 파일 매핑 초기화 */
+bool anon_initializer(struct page *page, enum vm_type type, void *kva)
+{
+	/* 핸들러 설정 */
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	if (anon_page == NULL)
+	{
+		return false;
+	}
+	return true;
 }
 
-/* Swap in the page by read contents from the swap disk. */
+/* 스왑 디스크에서 내용을 읽어 페이지를 스왑 인. */
 static bool
-anon_swap_in (struct page *page, void *kva) {
+anon_swap_in(struct page *page, void *kva)
+{
+	ASSERT(page != NULL);
 	struct anon_page *anon_page = &page->anon;
+	return true;
 }
 
-/* Swap out the page by writing contents to the swap disk. */
+/* 스왑 디스크에 내용을 써서 페이지를 스왑 아웃. */
 static bool
-anon_swap_out (struct page *page) {
+anon_swap_out(struct page *page)
+{
+	ASSERT(page != NULL);
 	struct anon_page *anon_page = &page->anon;
+	return true;
 }
 
-/* Destroy the anonymous page. PAGE will be freed by the caller. */
+/* 익명 페이지를 제거한다. PAGE는 호출자에 의해 해제된다. */
 static void
-anon_destroy (struct page *page) {
+anon_destroy(struct page *page)
+{
+	ASSERT(page != NULL);
 	struct anon_page *anon_page = &page->anon;
+	return;
 }

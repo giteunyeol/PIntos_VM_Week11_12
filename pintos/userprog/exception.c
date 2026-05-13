@@ -130,8 +130,12 @@ page_fault (struct intr_frame *f) {
 
 #ifdef VM
 	/* project 3 이후에서 사용한다. */
-	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
+	if (vm_try_handle_fault (f, fault_addr, user, write, not_present)) {
 		return;
+	} else {
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
 #endif
 
 	/* 페이지 폴트 수를 센다. */

@@ -4,29 +4,30 @@
 #include "threads/palloc.h"
 
 enum vm_type {
-	/* page not initialized */
+	/* 아직 초기화되지 않은 페이지 */
 	VM_UNINIT = 0,
-	/* page not related to the file, aka anonymous page */
+	/* 파일과 연결되지 않은 페이지, 즉 anonymous page */
 	VM_ANON = 1,
-	/* page that realated to the file */
+	/* 파일과 연결된 페이지 */
 	VM_FILE = 2,
-	/* page that hold the page cache, for project 4 */
+	/* project 4에서 사용하는 page cache를 담는 페이지 */
 	VM_PAGE_CACHE = 3,
 
-	/* Bit flags to store state */
+	/* 상태를 저장하기 위한 비트 플래그 */
 
-	/* Auxillary bit flag marker for store information. You can add more
-	 * markers, until the value is fit in the int. */
+	/* 부가 정보를 저장하기 위한 보조 비트 플래그 마커.
+	 * int 범위에 들어가는 값이라면 마커를 더 추가할 수 있다. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
 
-	/* DO NOT EXCEED THIS VALUE. */
+	/* 이 값을 넘어서면 안 된다. */
 	VM_MARKER_END = (1 << 31),
 };
 
 #include "vm/uninit.h"
 #include "vm/anon.h"
 #include "vm/file.h"
+#include "kernel/hash.h"
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
@@ -36,19 +37,21 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
-/* The representation of "page".
- * This is kind of "parent class", which has four "child class"es, which are
- * uninit_page, file_page, anon_page, and page cache (project4).
- * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
+/* "page"를 표현하는 구조체.
+ * 일종의 "부모 클래스" 역할을 하며, uninit_page, file_page,
+ * anon_page, page cache(project 4)라는 네 가지 "자식 클래스"를 가진다.
+ * 이 구조체에 미리 정의된 멤버는 제거하거나 수정하지 말 것. */
 struct page {
 	const struct page_operations *operations;
-	void *va;              /* Address in terms of user space */
-	struct frame *frame;   /* Back reference for frame */
+	void *va;              /* 사용자 공간 기준 주소 */
+	struct frame *frame;   /* 연결된 frame을 가리키는 역참조 */
+	struct hash_elem hash_elem;
+	bool writable;
 
-	/* Your implementation */
+	/* 구현할 내용 */
 
-	/* Per-type data are binded into the union.
-	 * Each function automatically detects the current union */
+	/* 타입별 데이터는 union 안에 묶여 있다.
+	 * 각 함수는 현재 사용 중인 union 멤버를 자동으로 판별한다. */
 	union {
 		struct uninit_page uninit;
 		struct anon_page anon;
@@ -59,16 +62,16 @@ struct page {
 	};
 };
 
-/* The representation of "frame" */
+/* "frame"을 표현하는 구조체 */
 struct frame {
 	void *kva;
 	struct page *page;
 };
 
-/* The function table for page operations.
- * This is one way of implementing "interface" in C.
- * Put the table of "method" into the struct's member, and
- * call it whenever you needed. */
+/* page 작업을 위한 함수 테이블.
+ * C에서 "인터페이스"를 구현하는 방법 중 하나다.
+ * 구조체 멤버에 "메서드" 테이블을 넣어 두고,
+ * 필요할 때마다 호출한다. */
 struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);
@@ -81,10 +84,11 @@ struct page_operations {
 #define destroy(page) \
 	if ((page)->operations->destroy) (page)->operations->destroy (page)
 
-/* Representation of current process's memory space.
- * We don't want to force you to obey any specific design for this struct.
- * All designs up to you for this. */
+/* 현재 프로세스의 메모리 공간을 표현하는 구조체.
+ * 이 구조체에 대해 특정 설계를 강제하지 않는다.
+ * 설계는 전적으로 구현하는 쪽에 달려 있다. */
 struct supplemental_page_table {
+	struct hash pages;
 };
 
 #include "threads/thread.h"
