@@ -4,7 +4,6 @@
 #include <round.h>
 #include <string.h>
 
-#include "debug_trace.h"
 #include "stdio.h"
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
@@ -240,7 +239,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 	off_t bytes_written = 0;
 	uint8_t *bounce = NULL;
 
-	DEG_CALL ("============", "INODE: inode->deny_write_cnt=%d", inode->deny_write_cnt);
+	printf ("============ INODE: inode->deny_write_cnt=%d\n", inode->deny_write_cnt);
 
 	if (inode->deny_write_cnt)
 		return 0;
