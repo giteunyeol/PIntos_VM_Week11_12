@@ -239,13 +239,28 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	void *va = pg_round_down (addr);
 
 	page = spt_find_page (spt, va);
+
 	bool is_not_found = page == NULL;
+	bool need_stack_growth = false;
 
 	DEG_BRANCH ("is_not_found", is_not_found);
 	if (is_not_found) {
+		//TODO 만약 스택 영역이면 need_stack_growth를 true로 아니라면 panic
+
+		PANIC ("is_not_found");
+	}
+
+	bool is_writable_dismach = page->writeable != write;
+	DEG_BRANCH ("is_writable_dismach", is_not_found);
+	if (is_writable_dismach) {
 		DEG_RETURN ("value=%d", false);
 		return false;
 	}
+
+	//TODO: not_present의 의미가 뭔지 모르겠음. 뭐 나중에 뒤지다 보면 나오려나? 핸들링 추가 필요
+	// 이거 execption.c에 있음 /* 참이면 페이지 부재, 거짓이면 읽기 전용 페이지에 쓰기. */
+	// 엄 일단 오케이 읽기 전용 페이지가 뭔 말인진 모르겠지만 나중에 개발할 때 참고할 수 있을 듯?
+
 
 	bool result = vm_do_claim_page (page);
 	DEG_RETURN ("value=%d", result);
