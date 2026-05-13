@@ -359,6 +359,10 @@ process_exec (void *f_name) {
 	struct file *old_exec_file = current->exec_file;
 
 
+#ifdef VM
+	supplemental_page_table_init (&current->spt);
+#endif
+
 	/* thread 구조체 안의 intr_frame은 사용할 수 없다.
 	 * 현재 스레드가 다시 스케줄될 때 해당 멤버에 실행 정보가 저장되기
 	 * 때문이다. */
