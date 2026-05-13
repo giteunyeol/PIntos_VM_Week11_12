@@ -961,6 +961,20 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
+	/* 메모리 페이지 하나를 가져온다. */
+	ASSERT(page != NULL);
+	struct aux *lazy_aux = aux;
+	uint8_t *frame_start_addr = page->frame->kva;	// Kva는 void 자료형. 연산을 위해 바이트 형태로 바꿔줘야함
+	file_seek(lazy_aux->file, lazy_aux->offset);	// 이 파일의 현재 읽기 위치를 offset 위치로 이동해라
+	/* 이 페이지를 적재한다. 파일의 현재 위치인 오프셋부터 4KB를 읽어 frame에 넣음 */
+	if (file_read(lazy_aux->file, frame_start_addr, lazy_aux->read_bytes) != (int)lazy_aux->read_bytes) {
+		free(lazy_aux);
+		return false;  
+	}
+	memset(frame_start_addr + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes);
+
+	free(lazy_aux);
+	return true;
 }
 
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
