@@ -190,13 +190,11 @@ syscall_handler (struct intr_frame *f) {
 		int fd = (int) f->R.rdi;
 		const void *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
-
 		DEG_NOTE ("WRITE", "CALL fd=%d, buf=%p sz=%d", fd, buffer, size);
-		printf ("CALL fd=%d, buf=%p sz=%d\n", fd, buffer, size);
+		printf ("WRITE CALL fd=%d, buf=%p sz=%d\n", fd, buffer, size);
 
 		if (size == 0) {
 			f->R.rax = 0;
-			printf ("RTN - 0\n");
 			break;
 		}
 
@@ -204,32 +202,21 @@ syscall_handler (struct intr_frame *f) {
 			validate_user_buffer(buffer, size);
 			putbuf (buffer, size);
 			f->R.rax = size;
-			printf ("RTN - 1\n");
 		} else if (fd >= 2) {
 			struct fd_entry *entry = find_fd_entry(fd);
 			if (entry == NULL || entry->file == NULL) {
-				printf ("RTN - 2\n");
 				f->R.rax = -1;
-				// DEG_NOTE ("WRITE",
-				// 			"END-0 (entry == NULL)=%d, (entry->file == NULL)=%d",
-				// 			entry == NULL, entry->file == NULL);
+				printf ("WRITE entry or file is null");
 				break;
 			}
-			printf ("CHECK - 1\n");
 			validate_user_buffer(buffer, size);
-			printf ("CHECK - 2\n");
 			lock_acquire(&filesys_lock);
-			printf ("CHECK - 3\n");
-			f->R.rax = file_write(entry->file, buffer, size);
-			printf ("CHECK - 4\n");
+			off_t bytes_written = file_write(entry->file, buffer, size);
+			f->R.rax = bytes_written;
+			printf ("WRITE TEMP bytes_written=%d size=%d\n", bytes_written, size);
 			lock_release(&filesys_lock);
-			printf ("CHECK - 5\n");
-			//DEG_NOTE ("WRITE", "END-S fd=%d, buf=%p sz=%d", fd, buffer, size);
-			printf ("RTN - 3\n");
 		} else {
 			f->R.rax = -1;
-			//DEG_NOTE ("WRITE", "END-1");
-			printf ("RTN - 4\n");
 		}
 		break;
 	}
@@ -247,9 +234,14 @@ syscall_handler (struct intr_frame *f) {
 		off_t position = (off_t)f->R.rsi;
 		struct fd_entry *entry = find_fd_entry(fd);
 
-		if (entry == NULL || entry->file == NULL || position < 0) {
-			break;
-		}
+		// if (entry == NULL || entry->file == NULL || position < 0) {
+		// 	f->R.rax = 0;
+		// 	break;
+		// }
+		DEG_NOTE ("sys.seek", "fd=%d, file=%p position=%d",
+				fd, entry->file, position);
+		printf ("SYS_SEEK fd=%d, file=%p position=%d\n",
+				fd, entry->file, position);
 
 		lock_acquire(&filesys_lock);
 		file_seek(entry->file, position);

@@ -36,6 +36,8 @@ test_main (void)
 
   /* child-rox에 다시 쓴다. */
   seek (handle, 0);
-  CHECK (write (handle, buffer, sizeof buffer) == (int) sizeof buffer,
+  int rs = write (handle, buffer, sizeof buffer);
+    msg("----rs %d  sizeof buffer={%d}", rs, sizeof buffer);
+  CHECK (rs == (int) sizeof buffer,
          "write \"child-rox\"");
 }
