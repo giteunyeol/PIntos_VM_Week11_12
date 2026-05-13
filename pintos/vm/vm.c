@@ -36,6 +36,16 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+static uint64_t
+page_hash (const struct hash_elem *e, void *aux UNUSED)  {
+	struct page *something = hash_entry(e, struct page, elem);
+	return hash_bytes ( &something -> va, sizeof something -> va) ;
+}
+
+
+
+static uint64_t
+page_less ()      ;
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -55,6 +65,9 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: should modify the field after calling the uninit_new. */
 
 		/* TODO: Insert the page into the spt. */
+
+
+
 	}
 err:
 	return false;
@@ -75,6 +88,11 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
+
+			void *origin_va = NULL;
+			origin_va = page->va;
+			// 이제 spt에 집어 넣기
+			
 
 	return succ;
 }
@@ -174,7 +192,20 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+
+//일단 여기
+//bool hash_init (struct hash *, hash_hash_func *, hash_less_func *, void *aux);
+
+
+hash_init(&spt->pages,page_hash,?,?)
+/*
+hash_init (
+	pages, 
+	hash_hash_func *, 
+	hash_less_func *, 
+	*aux);
 }
+*/
 
 /* Copy supplemental page table from src to dst */
 bool
