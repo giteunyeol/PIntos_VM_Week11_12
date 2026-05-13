@@ -165,12 +165,27 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* 성공하면 true를 반환한다. */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+	if (addr == NULL) {
+		return false;
+	} 
+	if (not_present == false) {
+		return false;
+	}
+	if (!is_user_vaddr(addr)) {
+		return false;
+	}
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	struct page *page = spt_find_page(spt, addr);
 	/* TODO: fault가 유효한지 검증한다. */
 	/* TODO: 여기에 코드를 작성한다. */
+	if (!page) {
+		return false;
+	}
+	if (write && !page->writable) {
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
