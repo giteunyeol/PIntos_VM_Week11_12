@@ -2,6 +2,7 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "filesys/off_t.h"
 
 struct page_lazy_load_aux {
     struct file *file;

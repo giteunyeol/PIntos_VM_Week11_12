@@ -1,6 +1,8 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+
+#include "debug_trace.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
@@ -14,6 +16,7 @@
 #include "devices/input.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "kernel/stdio.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
@@ -188,6 +191,8 @@ syscall_handler (struct intr_frame *f) {
 		const void *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
 
+		DEG_NOTE ("sys.write", "fd=%d, buf=%p sz=%d", fd, buffer, size);
+
 		if (size == 0) {
 			f->R.rax = 0;
 			break;
@@ -195,7 +200,7 @@ syscall_handler (struct intr_frame *f) {
 
 		if (fd == 1) {
 			validate_user_buffer(buffer, size);
-			putbuf(buffer, size);
+			putbuf (buffer, size);
 			f->R.rax = size;
 		} else if (fd >= 2) {
 			struct fd_entry *entry = find_fd_entry(fd);
@@ -244,6 +249,7 @@ syscall_handler (struct intr_frame *f) {
 			 e = list_next(e)) {
 			struct fd_entry *entry = list_entry(e, struct fd_entry, elem);
 			if (entry->fd == fd) {
+				DEG_NOTE ("sys.close", "fd=%d, file=%p", fd, entry->file);
 				lock_acquire(&filesys_lock);
 				file_close(entry->file);
 				lock_release(&filesys_lock);
