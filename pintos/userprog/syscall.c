@@ -192,9 +192,11 @@ syscall_handler (struct intr_frame *f) {
 		size_t size = (size_t) f->R.rdx;
 
 		DEG_NOTE ("WRITE", "CALL fd=%d, buf=%p sz=%d", fd, buffer, size);
+		printf ("CALL fd=%d, buf=%p sz=%d\n", fd, buffer, size);
 
 		if (size == 0) {
 			f->R.rax = 0;
+			printf ("RTN - 0\n");
 			break;
 		}
 
@@ -202,23 +204,32 @@ syscall_handler (struct intr_frame *f) {
 			validate_user_buffer(buffer, size);
 			putbuf (buffer, size);
 			f->R.rax = size;
+			printf ("RTN - 1\n");
 		} else if (fd >= 2) {
 			struct fd_entry *entry = find_fd_entry(fd);
 			if (entry == NULL || entry->file == NULL) {
+				printf ("RTN - 2\n");
 				f->R.rax = -1;
 				// DEG_NOTE ("WRITE",
 				// 			"END-0 (entry == NULL)=%d, (entry->file == NULL)=%d",
 				// 			entry == NULL, entry->file == NULL);
 				break;
 			}
+			printf ("CHECK - 1\n");
 			validate_user_buffer(buffer, size);
+			printf ("CHECK - 2\n");
 			lock_acquire(&filesys_lock);
+			printf ("CHECK - 3\n");
 			f->R.rax = file_write(entry->file, buffer, size);
+			printf ("CHECK - 4\n");
 			lock_release(&filesys_lock);
+			printf ("CHECK - 5\n");
 			//DEG_NOTE ("WRITE", "END-S fd=%d, buf=%p sz=%d", fd, buffer, size);
+			printf ("RTN - 3\n");
 		} else {
 			f->R.rax = -1;
 			//DEG_NOTE ("WRITE", "END-1");
+			printf ("RTN - 4\n");
 		}
 		break;
 	}

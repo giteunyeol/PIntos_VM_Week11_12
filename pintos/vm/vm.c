@@ -63,7 +63,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	DEG_NOTE ("here", "-- init -- 0");
 	DEG_CALL ("type=%d upage=%p writable=%d init=%p aux=%p",
 			type, upage, writable, (void *) init, aux);
-	printf ("vm_alloc_page_with_initializer\n");
 
 	ASSERT (pg_round_down (upage) == upage);
 	// UNITNIT은 생성 요청 타입으로서 쓸 수 없음. page_get_type() 참고하면 더 이해하기 쉬움
