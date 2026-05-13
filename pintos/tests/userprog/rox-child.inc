@@ -32,8 +32,6 @@ test_main (void)
   CHECK (wait (child) == 12, "wait for child");
   quiet = false;
 
-    msg("here? %d", child);
-
   /* child-rox에 다시 쓴다. */
   seek (handle, 0);
   int rs = write (handle, buffer, sizeof buffer);

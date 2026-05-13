@@ -33,17 +33,6 @@ static bool parse_filename(const char *file_name, char *tmp, size_t tmp_size);
 static void child_status_release (struct child_status *child);
 static struct child_status *child_status_create(void);
 
-struct child_status {
-	tid_t tid;                     /* 자식 스레드 tid */
-	int exit_status;               /* 자식이 exit()할 때 남긴 종료 코드 */
-	bool exited;                   /* 자식이 종료했는지 여부 */
-	bool waited;                   /* 부모가 자식에 대해서 wait() 했는지 여부 */
-	int ref_cnt;
-	struct lock lock;
-	struct semaphore wait_sema;    /* 부모가 자식 종료를 기다릴 때 사용하는 세마포어 */
-	struct list_elem elem;		   /* child list 리스트 노드 */
-};
-
 struct fork_aux {
 	struct thread *parent;	// fork 를 호출한 부모 스레드
 	struct intr_frame parent_if;	// fork 시점의 부모 실행 문맥 복사본

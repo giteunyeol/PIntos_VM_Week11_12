@@ -191,7 +191,9 @@ syscall_handler (struct intr_frame *f) {
 		const void *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
 		DEG_NOTE ("WRITE", "CALL fd=%d, buf=%p sz=%d", fd, buffer, size);
-		printf ("WRITE CALL fd=%d, buf=%p sz=%d\n", fd, buffer, size);
+		printf ("WRITE CALL fd=%d, buf=%p sz=%d exec_file=%p exec_file=%p\n", fd, buffer, size, t->exec_file);
+		struct child_status *stat = t->my_status;
+			printf ("WRITE child_status ref_cnt=%d\n", stat->ref_cnt);
 
 		if (size == 0) {
 			f->R.rax = 0;
@@ -251,6 +253,7 @@ syscall_handler (struct intr_frame *f) {
 
 	case SYS_CLOSE: {
 		int fd = (int) f->R.rdi;
+		printf ("sys.close START fd=%d\n",fd);
 		struct list_elem *e;
 		for (e = list_begin(&t->fd_list);
 			 e != list_end(&t->fd_list);
@@ -258,6 +261,7 @@ syscall_handler (struct intr_frame *f) {
 			struct fd_entry *entry = list_entry(e, struct fd_entry, elem);
 			if (entry->fd == fd) {
 				DEG_NOTE ("sys.close", "fd=%d, file=%p", fd, entry->file);
+				printf ("sys.close   fd=%d, file=%p\n", fd, entry->file);
 				lock_acquire(&filesys_lock);
 				file_close(entry->file);
 				lock_release(&filesys_lock);
@@ -356,7 +360,17 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
 
     return false;
 }
+#ifndef VM
+static void
+validate_user_ptr(const void *ptr) {
+	struct thread *cur = thread_current();
 
+	if (ptr == NULL || !is_user_vaddr(ptr) ||
+			pml4_get_page(cur->pml4, ptr) == NULL) {
+		kill_process_due_to_bad_user_memory();
+	}
+}
+#else
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
@@ -369,6 +383,7 @@ validate_user_ptr(const void *ptr) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
+#endif
 
 static void
 validate_user_buffer(const void *buffer, size_t size) {
