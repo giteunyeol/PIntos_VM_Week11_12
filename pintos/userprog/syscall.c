@@ -191,7 +191,7 @@ syscall_handler (struct intr_frame *f) {
 		const void *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
 
-		DEG_NOTE ("sys.write", "fd=%d, buf=%p sz=%d", fd, buffer, size);
+		DEG_NOTE ("WRITE", "CALL fd=%d, buf=%p sz=%d", fd, buffer, size);
 
 		if (size == 0) {
 			f->R.rax = 0;
@@ -206,14 +206,19 @@ syscall_handler (struct intr_frame *f) {
 			struct fd_entry *entry = find_fd_entry(fd);
 			if (entry == NULL || entry->file == NULL) {
 				f->R.rax = -1;
+				// DEG_NOTE ("WRITE",
+				// 			"END-0 (entry == NULL)=%d, (entry->file == NULL)=%d",
+				// 			entry == NULL, entry->file == NULL);
 				break;
 			}
 			validate_user_buffer(buffer, size);
 			lock_acquire(&filesys_lock);
 			f->R.rax = file_write(entry->file, buffer, size);
 			lock_release(&filesys_lock);
+			//DEG_NOTE ("WRITE", "END-S fd=%d, buf=%p sz=%d", fd, buffer, size);
 		} else {
 			f->R.rax = -1;
+			//DEG_NOTE ("WRITE", "END-1");
 		}
 		break;
 	}
@@ -352,9 +357,12 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
+	struct supplemental_page_table spt = cur->spt;
+
+	void *va = pg_round_down (ptr);
 
 	if (ptr == NULL || !is_user_vaddr(ptr) ||
-			pml4_get_page(cur->pml4, ptr) == NULL) {
+			spt_find_page (&spt, va) == NULL) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
