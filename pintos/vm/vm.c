@@ -60,7 +60,6 @@ static struct frame *vm_evict_frame (void);
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
-	DEG_NOTE ("here", "-- init -- 0");
 	DEG_CALL ("type=%d upage=%p writable=%d init=%p aux=%p",
 			type, upage, writable, (void *) init, aux);
 
@@ -328,6 +327,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			ASSERT (dst_aux != NULL);
 
 			memcpy (dst_aux, src_aux, sizeof *src_aux);
+			dst_aux->file = file_duplicate (src_aux->file); // 파일같은 포인터는 따로 복사
 			ASSERT(dst_aux->file != NULL);
 
 			vm_alloc_page_with_initializer (page_get_type (src_page), uva,
