@@ -1051,12 +1051,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+		DEG_NOTE ("here", "-- 0");
+
 		struct page_lazy_load_aux *aux = malloc (sizeof *aux);
+
+		DEG_NOTE ("here", "-- 1");
 		ASSERT(aux != NULL); // 일단 검증
+
+		DEG_NOTE ("here", "-- 2");
 		aux->file = file;
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
+		DEG_NOTE ("here", "-- 3");
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 					lazy_load_segment, aux)) {
 			//TODO: 이것도 꼭 해야하나 싶긴 함. 실패하는걸 고려해야하나? 일단은 안하고 나중에...
@@ -1064,16 +1071,20 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			return false;
 		}
 
+		DEG_NOTE ("here", "-- 4");
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 		ofs += page_read_bytes;
 	}
+
+	DEG_NOTE ("here", "-- 5");
 	bool has_page_end = read_bytes > 0 || zero_bytes > 0;
 	DEG_LOOP_END ("read_bytes > 0 || zero_bytes > 0",
 			"value=%d upage=%p read_bytes=%u zero_bytes=%u",
 			has_page_end, upage, read_bytes, zero_bytes);
+	DEG_NOTE ("here", "-- 6");
 	DEG_RETURN ("value=true");
 	return true;
 }
