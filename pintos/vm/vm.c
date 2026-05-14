@@ -256,11 +256,20 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	bool is_not_found = page == NULL;
 	bool is_stack_access = (addr + 8) == (void *) f->rsp;
 	bool need_stack_growth = is_stack_access && is_not_found;
+	bool is_stack_and_over_area = need_stack_growth &&
+									((uintptr_t) va == MAX_USER_STACK);
+	DEG_BRANCH ("is_stack_and_over_area", is_stack_and_over_area);
+	if (is_stack_and_over_area) {
+		DEG_RETURN ("value=%d cause=is_stack_and_over_area", false);
+		return false;
+	}
 
-	DEG_BRANCH ("is_stack_access", is_not_found);
+	DEG_BRANCH ("need_stack_growth", need_stack_growth);
 	if (need_stack_growth) {
 		DEG_NOTE ("note", "va=%p addr=%p sp=%p", va, addr, addr + 8); // is_stack_access 통과하는 상황에선 참
 		vm_stack_growth (va);
+		DEG_RETURN ("value=%d cause=need_stack_growth", true);
+		return true;
 	}
 
 	DEG_BRANCH ("is_not_found", is_not_found);
@@ -270,7 +279,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	}
 
 	bool is_writable_dismach = page->writeable != write;
-	DEG_BRANCH ("is_writable_dismach", is_not_found);
+	DEG_BRANCH ("is_writable_dismach", is_writable_dismach);
 	if (is_writable_dismach) {
 		DEG_RETURN ("value=%d cause=is_writable_dismach", false);
 		return false;
