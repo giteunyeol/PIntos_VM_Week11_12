@@ -271,13 +271,6 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 		return false;
 	}
 
-	bool is_writable_dismach = page->writeable != write;
-	DEG_BRANCH ("is_writable_dismach", is_not_found);
-	if (is_writable_dismach) {
-		DEG_RETURN ("value=%d cause=is_writable_dismach", false);
-		return false;
-	}
-
 	//TODO: not_present의 의미가 뭔지 모르겠음. 뭐 나중에 뒤지다 보면 나오려나? 핸들링 추가 필요
 	// 이거 execption.c에 있음 /* 참이면 페이지 부재, 거짓이면 읽기 전용 페이지에 쓰기. */
 	// 엄 일단 오케이 읽기 전용 페이지가 뭔 말인진 모르겠지만 나중에 개발할 때 참고할 수 있을 듯?
