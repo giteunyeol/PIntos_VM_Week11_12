@@ -445,6 +445,11 @@ bool validate_stack_area (uintptr_t rsp, void *addr) {
 	bool is_cmd_push = (uintptr_t) addr + 8 == rsp;
 	bool is_btw_rsp = (uintptr_t) addr > rsp;
 
+	uintptr_t rsp_trd = thread_current ()->rsp_at_syscall;
+
 	bool is_valid = is_in_stack_area && (is_cmd_push || is_btw_rsp);
+	DEG_NOTE ("dump", "rsp=%p rsp_trd=%p va=%p addr=%p (addr+8)=%p rsp=%p", rsp, rsp_trd, va, addr, addr + 8);
+	DEG_NOTE ("stat", "is_valid=%d is_in_stack_area=%d is_cmd_push=%d is_btw_rsp=%d",
+			is_valid, is_in_stack_area, is_cmd_push, is_btw_rsp);
 	return is_valid;
 }
