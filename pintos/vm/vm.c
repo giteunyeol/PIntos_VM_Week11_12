@@ -248,19 +248,33 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 				(void *) f, addr, user, write, not_present);
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
+	uintptr_t sp = thread_current ()->rsp_at_syscall;
 	struct page *page = NULL;
 	void *va = pg_round_down (addr);
 
 	page = spt_find_page (spt, va);
 
 	bool is_not_found = page == NULL;
-	bool is_stack_access = (addr + 8) == (void *) f->rsp;
+	bool is_stack_access = (addr + 8) == (void *) sp;
 	bool need_stack_growth = is_stack_access && is_not_found;
 
-	DEG_BRANCH ("is_stack_access", is_not_found);
+
+	void *upva = pg_round_down (addr+PGSIZE); // 경계 영역이면 그대로라서 항상 올림을 위해서
+	DEG_NOTE ("stk", "is_stack_access=%d sp_sys=%p va=%p upva=%p addr=%p rsp=%p", is_stack_access, sp, va, upva, addr, f->rsp);
+	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	if (stack_bottom == upva) {
+		upva = stack_bottom;
+	}
+	struct page *uppage = spt_find_page (spt, upva);
+	if (uppage != NULL) {
+		DEG_NOTE ("stk2", "upva=%p va=%p uppage=%p type=%d", upva, va, uppage->va, uppage->operations->type);
+	}
+
+	DEG_BRANCH ("need_stack_growth", need_stack_growth);
 	if (need_stack_growth) {
-		DEG_NOTE ("note", "va=%p addr=%p sp=%p", va, addr, addr + 8); // is_stack_access 통과하는 상황에선 참
 		vm_stack_growth (va);
+		DEG_RETURN ("value=%d cause=need_stack_growth", true);
+		return true;
 	}
 
 	DEG_BRANCH ("is_not_found", is_not_found);

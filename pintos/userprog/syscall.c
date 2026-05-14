@@ -127,6 +127,9 @@ syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
 
 	struct thread *t = thread_current();
+#ifdef VM
+	t->rsp_at_syscall = f->rsp;
+#endif
 
 	switch (f->R.rax)
 	{
