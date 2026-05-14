@@ -246,8 +246,19 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	DEG_BRANCH ("is_not_found", is_not_found);
 	if (is_not_found) {
 		//TODO 만약 스택 영역이면 need_stack_growth를 true로 아니라면 panic
+		void *sp = (void *) f->rsp;
+		void *rdsp = pg_round_down (sp);
+		void *rusp = pg_round_up (sp);
+		DEG_NOTE ("note", "addr=%p sp=%p rdsp=%p rusp=%p", addr, sp, rdsp, rusp);
+		bool is_stack_access = (addr + 8) == sp;
+		DEG_BRANCH ("is_stack_access", is_stack_access);
+		if (is_stack_access) {
+			DEG_RETURN ("value=%d", true);
+			return true;
+		}
 
-		PANIC ("is_not_found");
+		DEG_RETURN ("value=%d", false);
+		return false;
 	}
 
 	bool is_writable_dismach = page->writeable != write;

@@ -354,6 +354,7 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
     return false;
 }
 
+#ifndef VM
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
@@ -366,6 +367,17 @@ validate_user_ptr(const void *ptr) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
+#else
+static void
+validate_user_ptr(const void *ptr) {
+	struct thread *cur = thread_current();
+
+	if (ptr == NULL || !is_user_vaddr(ptr) ||
+			pml4_get_page(cur->pml4, ptr) == NULL) {
+		kill_process_due_to_bad_user_memory();
+	}
+}
+#endif
 
 static void
 validate_user_buffer(const void *buffer, size_t size) {
