@@ -36,7 +36,7 @@
 
 /* 사용자 스택 시작점. */
 #define USER_STACK 0x47480000
-#define MAX_USER_STACK (USER_STACK + (1 << 20)) // USER_STACK + 1MB
+#define MIN_USER_STACK (USER_STACK - (1 << 20)) // USER_STACK - 1MB 작을수록 커지니까
 
 /* `VADDR`가 사용자 가상 주소이면 true를 반환한다. */
 #define is_user_vaddr(vaddr) (!is_kernel_vaddr((vaddr)))
