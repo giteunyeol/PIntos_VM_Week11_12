@@ -255,20 +255,15 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	page = spt_find_page (spt, va);
 
 	bool is_not_found = page == NULL;
-	bool is_stack_access = (addr + 8) == (void *) sp;
-	bool need_stack_growth = is_stack_access && is_not_found;
 
+	uintptr_t stack_bottom = (uintptr_t) (((uint8_t *) USER_STACK) - PGSIZE);
+	bool is_in_stack_area = stack_bottom > (uintptr_t) va && MIN_USER_STACK < (uintptr_t) va;
+	bool is_cmd_push = (uintptr_t) addr + 8 == f->rsp;
+	bool is_btw_rsp = (uintptr_t) addr > f->rsp;
+	DEG_NOTE ("stk", "stack_bottom=%p va=%p addr=%p (addr+8)=%p rsp=%p", stack_bottom, va, addr, addr + 8, f->rsp);
+	DEG_NOTE ("stk2", "is_in_stack_area=%d is_cmd_push=%d is_btw_rsp=%d", is_in_stack_area, is_cmd_push, is_btw_rsp);
 
-	void *upva = pg_round_down (addr+PGSIZE); // 경계 영역이면 그대로라서 항상 올림을 위해서
-	DEG_NOTE ("stk", "is_stack_access=%d sp_sys=%p va=%p upva=%p addr=%p rsp=%p", is_stack_access, sp, va, upva, addr, f->rsp);
-	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-	if (stack_bottom == upva) {
-		upva = stack_bottom;
-	}
-	struct page *uppage = spt_find_page (spt, upva);
-	if (uppage != NULL) {
-		DEG_NOTE ("stk2", "upva=%p va=%p uppage=%p type=%d", upva, va, uppage->va, uppage->operations->type);
-	}
+	bool need_stack_growth = is_not_found && is_in_stack_area && (is_cmd_push || is_btw_rsp);
 
 	DEG_BRANCH ("need_stack_growth", need_stack_growth);
 	if (need_stack_growth) {
