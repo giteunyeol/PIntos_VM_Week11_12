@@ -248,26 +248,24 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 				(void *) f, addr, user, write, not_present);
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-	uintptr_t sp = thread_current ()->rsp_at_syscall;
 	struct page *page = NULL;
 	void *va = pg_round_down (addr);
 
 	page = spt_find_page (spt, va);
 
 	bool is_not_found = page == NULL;
-
-	bool is_valid_stack_area = validate_stack_area (f->rsp, addr);
-	bool need_stack_growth = is_not_found && is_valid_stack_area;
-
-	DEG_BRANCH ("need_stack_growth", need_stack_growth);
-	if (need_stack_growth) {
-		vm_stack_growth (va);
-		DEG_RETURN ("value=%d cause=need_stack_growth", true);
-		return true;
-	}
-
 	DEG_BRANCH ("is_not_found", is_not_found);
 	if (is_not_found) {
+		bool is_valid_stack_area = validate_stack_area (addr);
+		bool need_stack_growth = is_not_found && is_valid_stack_area;
+
+		DEG_BRANCH ("need_stack_growth", need_stack_growth);
+		if (need_stack_growth) {
+			vm_stack_growth (va);
+			DEG_RETURN ("value=%d cause=need_stack_growth", true);
+			return true;
+		}
+
 		DEG_RETURN ("value=%d cause=is_not_found", false);
 		return false;
 	}
@@ -438,17 +436,17 @@ destroy_frame_if_exists(struct page* page) {
 }
 
 //TODO: 위치 적절하게 옮기기
-bool validate_stack_area (uintptr_t rsp, void *addr) {
+bool validate_stack_area (void *addr) {
+	uintptr_t rsp = thread_current ()->rsp_at_syscall;
+
 	void *va = pg_round_down (addr);
 	uintptr_t stack_bottom = (uintptr_t) (((uint8_t *) USER_STACK) - PGSIZE);
 	bool is_in_stack_area = stack_bottom > (uintptr_t) va && MIN_USER_STACK < (uintptr_t) va;
-	bool is_cmd_push = (uintptr_t) addr + 8 == rsp;
+	bool is_cmd_push = (uintptr_t) addr + 8 <= rsp;
 	bool is_btw_rsp = (uintptr_t) addr > rsp;
 
-	uintptr_t rsp_trd = thread_current ()->rsp_at_syscall;
-
 	bool is_valid = is_in_stack_area && (is_cmd_push || is_btw_rsp);
-	DEG_NOTE ("dump", "rsp=%p rsp_trd=%p va=%p addr=%p (addr+8)=%p rsp=%p", rsp, rsp_trd, va, addr, addr + 8);
+	DEG_NOTE ("dump", "rsp=%p va=%p addr=%p (addr+8)=%p rsp=%p", rsp, va, addr, addr + 8);
 	DEG_NOTE ("stat", "is_valid=%d is_in_stack_area=%d is_cmd_push=%d is_btw_rsp=%d",
 			is_valid, is_in_stack_area, is_cmd_push, is_btw_rsp);
 	return is_valid;
