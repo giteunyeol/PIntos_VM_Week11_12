@@ -249,64 +249,41 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
+	void *va = pg_round_down (addr);
 
+	page = spt_find_page (spt, va);
+
+	bool is_not_found = page == NULL;
 	bool is_stack_access = (addr + 8) == (void *) f->rsp;
-	DEG_BRANCH ("is_stack_access", is_stack_access);
-	if (is_stack_access) {
-		// 스택이면 up
-		void *va = pg_round_up (addr);
-		page = spt_find_page (spt, va);
+	bool need_stack_growth = is_stack_access && is_not_found;
 
-		bool is_not_found = page == NULL;
+	DEG_BRANCH ("is_stack_access", is_not_found);
+	if (need_stack_growth) {
+		DEG_NOTE ("note", "va=%p addr=%p sp=%p", va, addr, addr + 8); // is_stack_access 통과하는 상황에선 참
+		vm_stack_growth (va);
+	}
 
-		if (is_not_found) {
-			bool need_stack_growth = is_stack_access && is_not_found;
-			bool is_stack_and_over_area = need_stack_growth &&
-								(uintptr_t) va == MIN_USER_STACK;
-			DEG_BRANCH ("is_stack_and_over_area", is_stack_and_over_area);
-			if (is_stack_and_over_area) {
-				DEG_RETURN ("value=%d cause=is_stack_and_over_area", false);
-				return false;
-			}
+	DEG_BRANCH ("is_not_found", is_not_found);
+	if (is_not_found) {
+		DEG_RETURN ("value=%d cause=is_not_found", false);
+		return false;
+	}
 
-			DEG_BRANCH ("need_stack_growth", need_stack_growth);
-			if (need_stack_growth) {
-				vm_stack_growth (pg_round_up (addr));
-				DEG_RETURN ("value=%d cause=need_stack_growth", true);
-				return true;
-			}
-		} else {
-			DEG_RETURN ("value=%d cause=stack_found", true);
-			return true;
-		}
+	bool is_writable_dismach = page->writeable != write;
+	DEG_BRANCH ("is_writable_dismach", is_not_found);
+	if (is_writable_dismach) {
+		DEG_RETURN ("value=%d cause=is_writable_dismach", false);
+		return false;
+	}
 
- 	} else {
- 		void *va = pg_round_down (addr);
- 		page = spt_find_page (spt, va);
+	//TODO: not_present의 의미가 뭔지 모르겠음. 뭐 나중에 뒤지다 보면 나오려나? 핸들링 추가 필요
+	// 이거 execption.c에 있음 /* 참이면 페이지 부재, 거짓이면 읽기 전용 페이지에 쓰기. */
+	// 엄 일단 오케이 읽기 전용 페이지가 뭔 말인진 모르겠지만 나중에 개발할 때 참고할 수 있을 듯?
 
- 		bool is_not_found = page == NULL;
- 		DEG_BRANCH ("is_not_found", is_not_found);
- 		if (is_not_found) {
- 			DEG_RETURN ("value=%d cause=is_not_found", false);
- 			return false;
- 		}
 
- 		bool is_writable_dismach = page->writeable != write;
- 		DEG_BRANCH ("is_writable_dismach", is_writable_dismach);
- 		if (is_writable_dismach) {
- 			DEG_RETURN ("value=%d cause=is_writable_dismach", false);
- 			return false;
- 		}
-
- 		//TODO: not_present의 의미가 뭔지 모르겠음. 뭐 나중에 뒤지다 보면 나오려나? 핸들링 추가 필요
- 		// 이거 execption.c에 있음 /* 참이면 페이지 부재, 거짓이면 읽기 전용 페이지에 쓰기. */
- 		// 엄 일단 오케이 읽기 전용 페이지가 뭔 말인진 모르겠지만 나중에 개발할 때 참고할 수 있을 듯?
-
- 		bool result = vm_do_claim_page (page);
- 		DEG_RETURN ("value=%d cause=success", result);
- 		return result;
- 	}
-	PANIC ("must not reach here");
+	bool result = vm_do_claim_page (page);
+	DEG_RETURN ("value=%d cause=success", result);
+	return result;
 }
 
 /* Free the page.
