@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
+#include "threads/mmu.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -49,17 +50,32 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
+	
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-
+		struct page * page = malloc(sizeof(struct page));
+		if(page == NULL) {
+			return false;
+		}
+		page -> writable = writable;
+		//타입에따라서 변수에 실행할 함수를 저장해주고 그걸 넘기라고?
+		bool (*initializer)(struct page *, enum vm_type, void *);
+		if(VM_TYPE(type) == VM_ANON) {
+			initializer = anon_initializer;
+		}
+		else if(VM_TYPE(type) == VM_FILE) {
+			initializer = file_backed_initializer;
+		}
+		uninit_new(page, upage, init, type, aux, initializer);
 		/* TODO: Insert the page into the spt. */
-
-
-
+		if(!spt_insert_page(spt, page)) {
+			free(page);
+			return false;
+		}
+		return true;
 	}
 err:
 	return false;
@@ -86,7 +102,7 @@ bool
 spt_insert_page (struct supplemental_page_table *spt,
 		struct page *page) {
 	/* TODO: Fill this function. */
-	//spt에 페이지를 삽입 하는데, 이게 있는지 체크해서 없으면 넣기, 있으면 false리턴
+	//spt에 페이지를 삽입 하는데, 이게 있는지 체크해서 없으면 넣기, (중복 페이지가)있으면 false리턴
 	if(hash_insert(spt->pages, &page->elem) == NULL) {
 		return true;
 	}
@@ -171,11 +187,16 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-
+	struct thread * current = thread_current();
+	page = spt_find_page(&current->spt,va);
+	if (page == NULL){
+		return false;
+	}
 	return vm_do_claim_page (page);
+
 }
 
 /* Claim the PAGE and set up the mmu. */
@@ -191,6 +212,7 @@ vm_do_claim_page (struct page *page) {
 	struct thread *current = thread_current();
 	//공하면 true, 메모리 할당이면 false를 반환합니다
 	if (!pml4_set_page(current->pml4, page->va, frame->kva, page->writable)) {
+		free(frame);
 		return false;
 	}
 
