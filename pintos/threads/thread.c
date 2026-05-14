@@ -394,6 +394,7 @@ tid_t thread_tid(void)
    호출자에게는 돌아오지 않는다. */
 void thread_exit(void)
 {
+	PANIC ("어느 콜에서 터지는걸까???");
 	ASSERT(!intr_context());
 
 #ifdef USERPROG
