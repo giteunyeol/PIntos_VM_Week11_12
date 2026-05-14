@@ -256,7 +256,8 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	bool is_not_found = page == NULL;
 	DEG_BRANCH ("is_not_found", is_not_found);
 	if (is_not_found) {
-		bool is_valid_stack_area = validate_stack_area (addr);
+		uintptr_t rsp = user ? f->rsp : thread_current ()->rsp_at_syscall;
+		bool is_valid_stack_area = validate_stack_area (rsp, addr);
 		bool need_stack_growth = is_not_found && is_valid_stack_area;
 
 		DEG_BRANCH ("need_stack_growth", need_stack_growth);
@@ -436,17 +437,16 @@ destroy_frame_if_exists(struct page* page) {
 }
 
 //TODO: 위치 적절하게 옮기기
-bool validate_stack_area (void *addr) {
-	uintptr_t rsp = thread_current ()->rsp_at_syscall;
-
+bool validate_stack_area (uintptr_t rsp, void *addr) {
+	ASSERT (is_user_vaddr (rsp))
 	void *va = pg_round_down (addr);
 	uintptr_t stack_bottom = (uintptr_t) (((uint8_t *) USER_STACK) - PGSIZE);
 	bool is_in_stack_area = stack_bottom > (uintptr_t) va && MIN_USER_STACK < (uintptr_t) va;
-	bool is_cmd_push = (uintptr_t) addr + 8 <= rsp;
+	bool is_cmd_push = rsp <= (uintptr_t) addr + 8;
 	bool is_btw_rsp = rsp < (uintptr_t) addr;
 
 	bool is_valid = is_in_stack_area && (is_cmd_push || is_btw_rsp);
-	DEG_NOTE ("dump", "rsp=%p va=%p addr=%p (addr+8)=%p rsp=%p", rsp, va, addr, addr + 8);
+	DEG_NOTE ("dump", "rsp=%p va=%p addr=%p (addr+8)=%p", (void *) rsp, va, addr, addr + 8);
 	DEG_NOTE ("stat", "is_valid=%d is_in_stack_area=%d is_cmd_push=%d is_btw_rsp=%d",
 			is_valid, is_in_stack_area, is_cmd_push, is_btw_rsp);
 	return is_valid;

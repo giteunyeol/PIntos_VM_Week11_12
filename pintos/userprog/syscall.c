@@ -378,7 +378,8 @@ validate_user_ptr(const void *ptr) {
 	bool is_null = ptr == NULL;
 	bool is_kva = is_kernel_vaddr(ptr);
 	bool is_no_spt = spt_find_page (&spt, va) == NULL;
-	bool is_no_stack = !validate_stack_area (ptr);
+	// syscall 내부라서 스레드 rsp가 항상 유효함
+	bool is_no_stack = !validate_stack_area (cur->rsp_at_syscall, ptr);
 	bool is_bad_area = is_no_spt && is_no_stack;
 	if (is_null || is_kva || is_bad_area) {
 		kill_process_due_to_bad_user_memory();
