@@ -249,22 +249,22 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 		void *sp = (void *) f->rsp;
 		void *rdsp = pg_round_down (sp);
 		void *rusp = pg_round_up (sp);
-		DEG_NOTE ("note", "addr=%p sp=%p rdsp=%p rusp=%p", addr, sp, rdsp, rusp);
+		DEG_NOTE ("note", "va=%p addr=%p (addr+8)=%p sp=%p rdsp=%p rusp=%p", va, addr, addr + 8, sp, rdsp, rusp);
 		bool is_stack_access = (addr + 8) == sp;
 		DEG_BRANCH ("is_stack_access", is_stack_access);
 		if (is_stack_access) {
-			DEG_RETURN ("value=%d", true);
+			DEG_RETURN ("value=%d cause=is_stack_access", true);
 			return true;
 		}
 
-		DEG_RETURN ("value=%d", false);
+		DEG_RETURN ("value=%d cause=is_not_found", false);
 		return false;
 	}
 
 	bool is_writable_dismach = page->writeable != write;
 	DEG_BRANCH ("is_writable_dismach", is_not_found);
 	if (is_writable_dismach) {
-		DEG_RETURN ("value=%d", false);
+		DEG_RETURN ("value=%d cause=is_writable_dismach", false);
 		return false;
 	}
 
@@ -274,7 +274,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 
 
 	bool result = vm_do_claim_page (page);
-	DEG_RETURN ("value=%d", result);
+	DEG_RETURN ("value=%d cause=success", result);
 	return result;
 }
 
