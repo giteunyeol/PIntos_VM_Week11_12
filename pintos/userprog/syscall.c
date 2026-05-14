@@ -361,12 +361,9 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
-	struct supplemental_page_table spt = cur->spt;
 
-	void *va = pg_round_down (ptr);
-
-	if (ptr == NULL || !is_user_vaddr(ptr) ||
-			spt_find_page (&spt, va) == NULL) {
+	if (ptr == NULL || is_kernel_vaddr(ptr) ||
+			pml4_get_page(cur->pml4, ptr) == NULL) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
@@ -374,9 +371,16 @@ validate_user_ptr(const void *ptr) {
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
+	struct supplemental_page_table spt = cur->spt;
 
-	if (ptr == NULL || !is_user_vaddr(ptr) ||
-			pml4_get_page(cur->pml4, ptr) == NULL) {
+	void *va = pg_round_down (ptr);
+
+	bool is_null = ptr == NULL;
+	bool is_kva = is_kernel_vaddr(ptr);
+	bool is_no_spt = spt_find_page (&spt, va) == NULL;
+	bool is_no_stack = !validate_stack_area (cur->rsp_at_syscall, ptr);
+	bool is_bad_area = is_no_spt && is_no_stack;
+	if (is_null || is_kva || is_bad_area) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
