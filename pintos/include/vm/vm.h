@@ -45,13 +45,8 @@ struct page {
 	const struct page_operations *operations;  //이 page가 어떤 동작을 할지 가리키는 함수 묶음
 	void *va;              /* Address in terms of user space */ // 이 page가 담당하는 사용자 가상 주소
 	struct frame *frame;   /* Back reference for frame */ //이 page가 올라갈 물리 프레임에 대한 포인터
-
-	/* Your implementation */
 	struct hash_elem elem;
-
-
-
-
+	bool writable;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */

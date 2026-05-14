@@ -83,23 +83,22 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
-	int succ = false;
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
 	/* TODO: Fill this function. */
-
-			void *origin_va = NULL;
-			origin_va = page->va;
-			// 이제 spt에 집어 넣기
-			
-
-	return succ;
+	//spt에 페이지를 삽입 하는데, 이게 있는지 체크해서 없으면 넣기, 있으면 false리턴
+	if(hash_insert(spt->pages, &page->elem) == NULL) {
+		return true;
+	}
+	return false;
 }
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	vm_dealloc_page (page);
-	return true;
+	if (hash_delete(spt->pages, &page->elem)) {
+		vm_dealloc_page (page);
+	}
+	return;
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -127,8 +126,13 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
+	struct frame *frame = malloc(sizeof (struct frame));
 	/* TODO: Fill this function. */
+	if (frame == NULL) {
+		PANIC ("todo");
+	}
+	frame->kva = palloc_get_page(PAL_USER);
+	frame->page = NULL;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -184,6 +188,11 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	struct thread *current = thread_current();
+	//공하면 true, 메모리 할당이면 false를 반환합니다
+	if (!pml4_set_page(current->pml4, page->va, frame->kva, page->writable)) {
+		return false;
+	}
 
 	return swap_in (page, frame->kva);
 }
