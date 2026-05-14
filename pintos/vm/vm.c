@@ -443,7 +443,7 @@ bool validate_stack_area (void *addr) {
 	uintptr_t stack_bottom = (uintptr_t) (((uint8_t *) USER_STACK) - PGSIZE);
 	bool is_in_stack_area = stack_bottom > (uintptr_t) va && MIN_USER_STACK < (uintptr_t) va;
 	bool is_cmd_push = (uintptr_t) addr + 8 <= rsp;
-	bool is_btw_rsp = (uintptr_t) addr > rsp;
+	bool is_btw_rsp = rsp < (uintptr_t) addr;
 
 	bool is_valid = is_in_stack_area && (is_cmd_push || is_btw_rsp);
 	DEG_NOTE ("dump", "rsp=%p va=%p addr=%p (addr+8)=%p rsp=%p", rsp, va, addr, addr + 8);
