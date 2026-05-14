@@ -219,7 +219,20 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
+	DEG_CALL ("addr=%p", addr);
+	// 스택의 writable은 항상 참이여야함
+	if (!vm_alloc_page (VM_ANON | VM_MARKER_0, addr, true)) {
+		goto panic;
+	}
+	if (!vm_claim_page (addr)) {
+		goto panic;
+	}
+
+	DEG_RETURN ("void");
+	return;
+panic:
+	PANIC ("FAILED vm_stack_growth");
 }
 
 /* Handle the fault on write_protected page */
@@ -241,22 +254,17 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,bool user, bool write,
 	page = spt_find_page (spt, va);
 
 	bool is_not_found = page == NULL;
-	bool need_stack_growth = false;
+	bool is_stack_access = (addr + 8) == (void *) f->rsp;
+	bool need_stack_growth = is_stack_access && is_not_found;
+
+	DEG_BRANCH ("is_stack_access", is_not_found);
+	if (need_stack_growth) {
+		DEG_NOTE ("note", "va=%p addr=%p sp=%p", va, addr, addr + 8); // is_stack_access 통과하는 상황에선 참
+		vm_stack_growth (va);
+	}
 
 	DEG_BRANCH ("is_not_found", is_not_found);
 	if (is_not_found) {
-		//TODO 만약 스택 영역이면 need_stack_growth를 true로 아니라면 panic
-		void *sp = (void *) f->rsp;
-		void *rdsp = pg_round_down (sp);
-		void *rusp = pg_round_up (sp);
-		DEG_NOTE ("note", "va=%p addr=%p (addr+8)=%p sp=%p rdsp=%p rusp=%p", va, addr, addr + 8, sp, rdsp, rusp);
-		bool is_stack_access = (addr + 8) == sp;
-		DEG_BRANCH ("is_stack_access", is_stack_access);
-		if (is_stack_access) {
-			DEG_RETURN ("value=%d cause=is_stack_access", true);
-			return true;
-		}
-
 		DEG_RETURN ("value=%d cause=is_not_found", false);
 		return false;
 	}
