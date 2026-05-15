@@ -1,5 +1,6 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
+#include "threads/vaddr.h"
 #include "vm/vm.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
@@ -26,6 +27,7 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &file_ops;
 
 	struct file_page *file_page = &page->file;
+	file_page->is_durty = false;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -43,7 +45,13 @@ file_backed_swap_out (struct page *page) {
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+	//TODO: 이거 맞나?
+	if (file_page->is_durty) {
+		file_write (page->mapped_file, page->va, PGSIZE);
+	}
+
+	file_close (page->mapped_file); // 내부에서 file free도 해줌
 }
 
 /* Do the mmap */
@@ -55,4 +63,9 @@ do_mmap (void *addr, size_t length, int writable,
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+}
+
+bool
+lazy_load_mapped_file (struct page *page, void *aux_) {
+	//TODO: 무언가 하기...
 }

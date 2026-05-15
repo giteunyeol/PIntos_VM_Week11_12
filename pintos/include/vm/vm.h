@@ -50,6 +50,7 @@ struct page {
 	struct hash_elem elem; // supplemental_page_table의 요소라는 뜻
 
 	bool writeable;
+	struct file *mapped_file; // mmap 처리용
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
