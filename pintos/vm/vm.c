@@ -38,7 +38,7 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 unsigned page_hash (const struct hash_elem *e, void *aux);// 페이지 엘엠을 받아서 페이지 밖으로 이동 후 va 찾아서 헤시 키로 변환.
-bool page_less (const struct hash_elem *a_,const struct hash_elem *b_, void *aux); //버킷 안의 주소 비교 -> 같은 키인지 반환 
+bool page_less (const struct hash_elem *a,const struct hash_elem *b, void *aux); //버킷 안의 주소 비교 -> 같은 키인지 반환 
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -167,13 +167,32 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+
+	if(addr == NULL) {
+		return false;
+	}
+	if(!is_user_vaddr(addr)) {
+		return false;
+	}
+	if(!not_present) {
+		return false; 
+	}
+	//write얘는 페이지가 존재하는지 안하는지 근데 우리가 페이지 안에 writable선언
+	//그건 읽기모드인지
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-
+	struct page * page = spt_find_page(spt, addr);
+	if(page == NULL) {
+		return false;
+	}
+	//page내부에서 writable이 true면 쓰기모드, false면 읽기모드
+	//받아온 변수(write)가 true면 쓰기모드
+	if(!(page->writable) && write) {
+		return false;
+	}
 	return vm_do_claim_page (page);
 }
 
@@ -247,8 +266,8 @@ page_hash (const struct hash_elem *e, void *aux )  {
 bool
 page_less (const struct hash_elem *a_,
            const struct hash_elem *b_, void *aux) {
-  const struct page *a = hash_entry (a_, struct page, hash_elem);
-  const struct page *b = hash_entry (b_, struct page, hash_elem);
-
-  return a->addr < b->addr;
+	const struct page *a = hash_entry (a_, struct page, elem);
+	const struct page *b = hash_entry (b_, struct page, elem);
+	
+	return a->va < b->va;
 }
