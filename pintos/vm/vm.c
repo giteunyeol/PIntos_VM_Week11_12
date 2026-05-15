@@ -436,7 +436,7 @@ bool validate_stack_area (uintptr_t rsp, void *addr) {
 	void *va = pg_round_down (addr);
 	uintptr_t stack_bottom = (uintptr_t) (((uint8_t *) USER_STACK) - PGSIZE);
 	bool is_in_stack_area = stack_bottom > (uintptr_t) va && MIN_USER_STACK < (uintptr_t) va;
-	bool is_cmd_push = rsp <= (uintptr_t) addr + 8;
+	bool is_cmd_push = rsp == (uintptr_t) addr + 8;
 	bool is_btw_rsp = rsp < (uintptr_t) addr;
 
 	bool is_valid = is_in_stack_area && (is_cmd_push || is_btw_rsp);
