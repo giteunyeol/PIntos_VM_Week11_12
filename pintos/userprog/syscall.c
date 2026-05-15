@@ -129,6 +129,7 @@ syscall_handler (struct intr_frame *f) {
 	struct thread *t = thread_current();
 #ifdef VM
 	t->rsp_at_syscall = f->rsp;
+	struct supplemental_page_table spt = thread_current()->spt;
 #endif
 
 	switch (f->R.rax)
@@ -324,9 +325,93 @@ syscall_handler (struct intr_frame *f) {
 		f->R.rax = ret;
 		break;
 	}
-	
-	default:
+
+	// void *
+	// mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+	//
+	// 유효성 검사 후 락 걸어서 do_mmap에게 넘김, 핵심 처리는 없고 유효성 검사만 좀 함
+	case SYS_MMAP: {
+		void * addr = (void *) f->R.rdi;
+		size_t length = f->R.rsi;
+		int writable = (int) f->R.rdx;
+		int fd = (int) f->R.r10;
+		off_t offset = (off_t) f->R.r8;
+
+		if (addr == NULL) {
+			goto err_mmap;
+		}
+
+		if (addr != pg_round_down (addr)) { // 아마 up이든 down이든 상관없을듯? 경계인지가 중요해서
+			goto err_mmap;
+		}
+
+		// 이거 page 단위로 넘겨가며 검사, addr이 경계 영역이라 ㄱㅊ
+		for (size_t i = 0; i < length; i += PGSIZE) {
+			bool is_alloced = spt_find_page (&spt, addr + i) != NULL;
+			if (is_alloced) {
+				goto err_mmap;
+			}
+		}
+
+		if (fd < 2) {
+			goto err_mmap;
+		}
+
+		struct fd_entry *found = NULL;
+		struct list_elem *e;
+		for (e = list_begin(&t->fd_list);
+			 e != list_end(&t->fd_list);
+			 e = list_next(e)) {
+			struct fd_entry *entry = list_entry(e, struct fd_entry, elem);
+			if (entry->fd == fd) {
+				found = entry;
+				break;
+			}
+		}
+
+		bool is_not_found = found == NULL;
+		if (is_not_found) {
+			goto err_mmap;
+		}
+
+		int f_length = file_length(found->file);
+		if (f_length <= 0) {
+			goto err_mmap;
+		}
+
+		lock_acquire(&filesys_lock);
+		f->R.rax = (uintptr_t) do_mmap (addr, length, writable, found->file, offset);
+		lock_release(&filesys_lock);
+
 		break;
+	err_mmap:
+		f->R.rax = (uintptr_t) NULL;
+		break;
+	}
+
+	// void
+	// munmap (void *addr);
+	case SYS_MUNMAP: {
+		void * addr = (void *) f->R.rdi;
+
+		if (addr == NULL) {
+			goto err_munmap;
+		}
+
+		if (addr != pg_round_down (addr)) { // 아마 up이든 down이든 상관없을듯? 경계인지가 중요해서
+			goto err_munmap;
+		}
+
+		do_munmap (addr);
+
+		break;
+	err_munmap:
+		f->R.rax = (uintptr_t) NULL;
+		break;
+	}
+
+	default:
+		PANIC ("unsurported syscall code");
 	}
 }
 
