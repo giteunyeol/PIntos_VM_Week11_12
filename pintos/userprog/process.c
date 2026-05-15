@@ -635,9 +635,6 @@ struct ELF64_PHDR {
 
 static bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
-static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes,
-		bool writable);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
@@ -1009,6 +1006,9 @@ lazy_load_segment (struct page *page, void *aux_) {
 	}
 
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+	page->file.file = file_reopen (file);
+	page->file.ofs = ofs;
 	free (aux);
 	DEG_RETURN ("value=true");
 	return true;
@@ -1027,7 +1027,7 @@ lazy_load_segment (struct page *page, void *aux_) {
  *
  * 성공하면 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가 나면
  * false를 반환한다. */
-static bool
+bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	DEG_CALL ("file=%p ofs=%lld upage=%p read_bytes=%u zero_bytes=%u writable=%d",

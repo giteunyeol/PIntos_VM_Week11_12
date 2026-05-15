@@ -1,6 +1,9 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
+#include "round.h"
+#include "threads/mmu.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
 #include "vm/vm.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
@@ -25,9 +28,7 @@ bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
-
-	struct file_page *file_page = &page->file;
-	file_page->is_durty = false;
+	struct file_page *file_page UNUSED = &page->file;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -46,26 +47,43 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page = &page->file;
-	//TODO: 이거 맞나?
-	if (file_page->is_durty) {
-		file_write (page->mapped_file, page->va, PGSIZE);
+	if (page->frame != NULL) {
+		if (pml4_is_dirty (thread_current ()->pml4, page->frame->kva)) {
+			file_seek (file_page->file, file_page->ofs);
+			file_write (file_page->file, page->frame->kva, PGSIZE);
+		}
 	}
 
-	file_close (page->mapped_file); // 내부에서 file free도 해줌
+	file_close (file_page->file); // 내부에서 file free도 해줌
 }
 
 /* Do the mmap */
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+	struct supplemental_page_table spt = thread_current ()->spt;
+	struct page *page = spt_find_page (&spt, addr);
+	ASSERT (page != NULL);
+
+	size_t read_bytes = length;
+	size_t zero_bytes = ROUND_UP(length, PGSIZE) - length;
+
+	if (!load_segment(file, offset, addr, read_bytes, zero_bytes, writable)) {
+		return NULL;
+
+	return addr;
+
 }
 
 /* Do the munmap */
 void
 do_munmap (void *addr) {
-}
-
-bool
-lazy_load_mapped_file (struct page *page, void *aux_) {
-	//TODO: 무언가 하기...
+	struct supplemental_page_table spt = thread_current ()->spt;
+	struct page *page = spt_find_page (&spt, addr);
+	ASSERT (page != NULL);
+	//TODO: 이거 전체 영역 다 순회하면서 제거해야하는데 어케할수있지??
+	// 흠...
+	// 다음 페이지 찾아가면서 동일한 페이지 보고 있으면 제거해야하나?
+	// 뭔가 이런거 말고 더 근본적인 그런게 있을 거 같은데?
+	// flag 값을 적어둔다거나???
 }
