@@ -63,13 +63,16 @@ do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
 	struct supplemental_page_table spt = thread_current ()->spt;
 	struct page *page = spt_find_page (&spt, addr);
-	ASSERT (page != NULL);
+	if (page != NULL) {
+		return NULL;
+	}
 
 	size_t read_bytes = length;
 	size_t zero_bytes = ROUND_UP(length, PGSIZE) - length;
 
 	if (!load_segment(file, offset, addr, read_bytes, zero_bytes, writable)) {
 		return NULL;
+	}
 
 	return addr;
 
@@ -80,10 +83,15 @@ void
 do_munmap (void *addr) {
 	struct supplemental_page_table spt = thread_current ()->spt;
 	struct page *page = spt_find_page (&spt, addr);
-	ASSERT (page != NULL);
-	//TODO: 이거 전체 영역 다 순회하면서 제거해야하는데 어케할수있지??
-	// 흠...
-	// 다음 페이지 찾아가면서 동일한 페이지 보고 있으면 제거해야하나?
-	// 뭔가 이런거 말고 더 근본적인 그런게 있을 거 같은데?
-	// flag 값을 적어둔다거나???
+	// ASSERT (page != NULL);
+	if (page != NULL) {
+		return;
+	}
+
+	uint64_t cnt = page->file.size;
+	while (cnt > 0) {
+		vm_dealloc_page (page);
+		page = spt_find_page (&spt, page->va + PGSIZE);
+		cnt--;
+	}
 }

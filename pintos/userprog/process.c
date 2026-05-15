@@ -1009,6 +1009,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 
 	page->file.file = file_reopen (file);
 	page->file.ofs = ofs;
+	page->file.size = 0;
 	free (aux);
 	DEG_RETURN ("value=true");
 	return true;
@@ -1036,10 +1037,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	struct supplemental_page_table spt = thread_current ()->spt;
+
 	bool has_page_start = read_bytes > 0 || zero_bytes > 0;
 	DEG_LOOP_START ("read_bytes > 0 || zero_bytes > 0",
 				"value=%d read_bytes=%u zero_bytes=%u",
 				has_page_start, read_bytes, zero_bytes);
+	bool is_frist_page = true;
 	while (read_bytes > 0 || zero_bytes > 0) {
 		bool has_page_now = read_bytes > 0 || zero_bytes > 0;
 		DEG_LOOP ("has_page_now",
@@ -1062,6 +1066,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			//TODO: 이것도 꼭 해야하나 싶긴 함. 실패하는걸 고려해야하나? 일단은 안하고 나중에...
 			DEG_RETURN ("value=false cause=vm_alloc_page_with_init");
 			return false;
+		}
+
+		if (is_frist_page) {
+			is_frist_page = false;
+			vm_claim_page (upage); // 파일로 처리되어야 값을 쓸 수 있음.
+			struct page *p = spt_find_page (&spt, upage);
+			ASSERT (p != NULL);
+			ASSERT (p->frame != NULL);
+			p->file.size = (read_bytes + zero_bytes) / PGSIZE;
 		}
 
 		/* 다음 페이지로 진행한다. */
