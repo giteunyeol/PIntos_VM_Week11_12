@@ -635,6 +635,9 @@ struct ELF64_PHDR {
 
 static bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
+static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+		uint32_t read_bytes, uint32_t zero_bytes,
+		bool writable);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
@@ -983,7 +986,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
 	struct page_lazy_load_aux *aux = aux_;
-	//DEG_CALL ("page=%p aux=%p va=%p", page, aux_, page->va);
+	DEG_CALL ("page=%p aux=%p va=%p", page, aux_, page->va);
 
 	if (!vm_claim_page (page->va)) {
 		PANIC ("FAIL in vm_claim_page");
@@ -997,14 +1000,8 @@ lazy_load_segment (struct page *page, void *aux_) {
 	uint8_t *kpage = page->frame->kva;
 	uint32_t page_read_bytes = aux->read_bytes;
 	uint32_t page_zero_bytes = aux->zero_bytes;
-	DEG_NOTE ("aux", "file=%p ofs=%lld kpage=%p read_bytes=%u zero_bytes=%u",
-	          file, (long long) ofs, (void *) kpage, page_read_bytes, page_zero_bytes);
 	file_seek (file, ofs);
-	int bytes_read = file_read (file, kpage, page_read_bytes);
-	bool is_diff_read = bytes_read != (int) page_read_bytes;
-	DEG_NOTE ("aux", "bytes_read=%d expected=%u is_diff=%d",
-	          bytes_read, page_read_bytes, (int) is_diff_read);
-	if (is_diff_read) {
+	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 		PANIC ("FAIL in file_read");
 		// free (aux); // 아직 할당된거 없으니까 이거만 하면 됨
 		// DEG_RETURN ("value=false cause=file_read");
@@ -1012,11 +1009,6 @@ lazy_load_segment (struct page *page, void *aux_) {
 	}
 
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-	DEG_NOTE ("file", "page=%p file=%p ofs=%lld", page, file, (long long) ofs);
-	page->file.file = file_reopen (file);
-	page->file.ofs = ofs;
-	page->file.size = 0;
 	free (aux);
 	DEG_RETURN ("value=true");
 	return true;
@@ -1035,7 +1027,7 @@ lazy_load_segment (struct page *page, void *aux_) {
  *
  * 성공하면 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가 나면
  * false를 반환한다. */
-bool
+static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	DEG_CALL ("file=%p ofs=%lld upage=%p read_bytes=%u zero_bytes=%u writable=%d",
@@ -1044,13 +1036,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	struct supplemental_page_table spt = thread_current ()->spt;
-
 	bool has_page_start = read_bytes > 0 || zero_bytes > 0;
 	DEG_LOOP_START ("read_bytes > 0 || zero_bytes > 0",
 				"value=%d read_bytes=%u zero_bytes=%u",
 				has_page_start, read_bytes, zero_bytes);
-	bool is_frist_page = true;
 	while (read_bytes > 0 || zero_bytes > 0) {
 		bool has_page_now = read_bytes > 0 || zero_bytes > 0;
 		DEG_LOOP ("has_page_now",
@@ -1073,21 +1062,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			//TODO: 이것도 꼭 해야하나 싶긴 함. 실패하는걸 고려해야하나? 일단은 안하고 나중에...
 			DEG_RETURN ("value=false cause=vm_alloc_page_with_init");
 			return false;
-		}
-
-		DEG_BRANCH ("is_frist_page", is_frist_page);
-		if (is_frist_page) {
-			is_frist_page = false;
-			vm_claim_page (upage); // 파일로 처리되어야 값을 쓸 수 있음.
-			struct page *p = spt_find_page (&spt, upage);
-			ASSERT (p != NULL);
-			void *va UNUSED = p->va;
-			va += 1;
-			void *v1 UNUSED = va;
-			// TODO: 뭔가 어떤 식으로든 로드해보려고 하기
-			ASSERT (p->frame != NULL);
-			p->file.size = (read_bytes + zero_bytes) / PGSIZE;
-			DEG_NOTE ("fst", "p=%p frame=%p size=%zu", p, p->frame, p->file.size);
 		}
 
 		/* 다음 페이지로 진행한다. */

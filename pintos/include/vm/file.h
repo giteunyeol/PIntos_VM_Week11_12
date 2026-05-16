@@ -7,9 +7,6 @@ struct page;
 enum vm_type;
 
 struct file_page {
-	struct file *file;
-	off_t ofs;
-	uint64_t size; // 페이지 개수. head 인 경우에 있음. 아닌 경우 0
 };
 
 void vm_file_init (void);
