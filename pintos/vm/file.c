@@ -63,7 +63,9 @@ do_mmap (void *addr, size_t u_length, int writable,
 
 	struct supplemental_page_table spt = thread_current ()->spt;
 	struct page *page = spt_find_page (&spt, addr);
-	bool page_already_exists = page != NULL;
+	bool page_already_exists = page != NULL
+			&& page_get_type (page) == VM_FILE
+			&& page->mmaped_size != 0;
 	DEG_BRANCH ("page_already_exists", page_already_exists);
 	if (page_already_exists) {
 		DEG_RETURN ("value=%p cause=page_already_exists", NULL);
