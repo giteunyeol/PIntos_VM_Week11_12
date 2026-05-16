@@ -48,10 +48,8 @@ file_backed_swap_out (struct page *page) {
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
-	struct file_page *file_page = &page->file;
-	struct supplemental_page_table *spt = &thread_current()->spt;
-
-	spt_remove_page (spt, page);
+	DEG_CALL ("call");
+	struct file_page *file_page UNUSED = &page->file;
 
 	file_close (file_page->file);
 }
@@ -131,7 +129,7 @@ do_munmap (void *addr) {
 		page = spt_find_page (spt, addr + (i * PGSIZE));
 		DEG_LOOP ("dealloc pages", "i=%d page=%p va=%p",
 				i, (void *) page, page->va);
-		vm_dealloc_page (page);
+		spt_remove_page (spt, page);
 	}
 	DEG_LOOP_END ("dealloc pages", "mmaped_size=%d", mmaped_size);
 	DEG_RETURN ("void");
