@@ -973,24 +973,23 @@ lazy_load_segment (struct page *page, void *aux) {
 	//파일이 있어 aux를 받아 그런데 aux안에 뭐가 또 있어 그걸 꺼내서 적재?
 
 	/* 이 페이지를 어떻게 채울지 계산한다.
-		* FILE에서 PAGE_READ_BYTES 바이트를 읽고
-		* 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
-
+		* FILE에서 READ_BYTES 바이트를 읽고
+		* 마지막 ZERO_BYTES 바이트는 0으로 채운다. */
 	//struct file *file, off_t new_pos
-	file_seek(aux->file, aux->offset);
+	struct aux * a = (struct aux *)aux;
 	/* 이 페이지를 적재한다. */
-	if (file_read (aux->file, page->frame->kva, aux->page_read_bytes) != (int) aux->page_read_bytes) {
+	if (file_read (a->file, page->frame->kva, a->read_bytes) != (int) a->read_bytes) {
 		free(aux);
 		return false;
 	}
 
 	uint8_t *vabyte = page->frame->kva;
-	memset (vabyte + aux->page_read_bytes, 0, aux->page_zero_bytes);
+	memset (vabyte + a->read_bytes, 0, a->zero_bytes);
 
 	return true;
 
 }
-`
+
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
  * 총 READ_BYTES + ZERO_BYTES 바이트의 가상 메모리를 다음과 같이
  * 초기화한다:
@@ -1004,6 +1003,7 @@ lazy_load_segment (struct page *page, void *aux) {
  *
  * 성공하면 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가 나면
  * false를 반환한다. */
+// ELF 실행 파일의 코드/데이터 세그먼트를 페이지 단위(4KB)로 쪼갬.
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -1028,7 +1028,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		lazy_aux->offset = ofs;
 		lazy_aux->read_bytes = page_read_bytes;
 		lazy_aux->zero_bytes = page_zero_bytes;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, // 가상 주소 upage에 해당하는 페이지 정보를 만들어서 SPT에 등록하는 함수
 					writable, lazy_load_segment, lazy_aux))
 			return false;
 
