@@ -309,17 +309,21 @@ static bool
 vm_do_claim_page (struct page *page) {
 	DEG_CALL ("page=%p va=%p", (void *) page, page != NULL ? page->va : NULL);
 	struct frame *frame = vm_get_frame ();
+	printf ("here -- 1\n");
 	list_push_back(&frame_table, &frame->elem); // 새거니까 추가
 
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
+	printf ("here -- 2\n");
 	pml4_set_page (thread_current ()->pml4, page->va, frame->kva,
 			page->writeable);
 
+	printf ("here -- 3\n");
 	bool result = swap_in (page, frame->kva);
 
+	printf ("here -- 4\n");
 	DEG_RETURN ("value=%d result=%d page=%p frame=%p kva=%p",
 				false, result, (void *) page, (void *) frame, frame->kva);
 	return true;

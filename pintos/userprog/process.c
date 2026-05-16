@@ -982,8 +982,11 @@ lazy_load_segment (struct page *page, void *aux_) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
+	printf ("here -- 4\n");
+	DEG_CALL("page=%p aux=%p va=%p", page, aux_, page->va);
+	printf ("here -- 5\n");
 	struct page_lazy_load_aux *aux = aux_;
-	DEG_CALL ("page=%p aux=%p va=%p", page, aux_, page->va);
+	printf ("here -- 6\n");
 
 	if (!vm_claim_page (page->va)) {
 		PANIC ("FAIL in vm_claim_page");
@@ -991,6 +994,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 		// free (aux);
 		// DEG_RETURN ("value=false cause=vm_claim_page");
 	}
+	printf ("here -- 7\n");
 
 	struct file *file = aux->file;
 	off_t ofs = aux->ofs;
@@ -1077,11 +1081,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		DEG_BRANCH ("is_frist_page", is_frist_page);
 		if (is_frist_page) {
+			printf ("here -- if fst page -- 8\n");
 			is_frist_page = false;
 			vm_claim_page (upage); // 파일로 처리되어야 값을 쓸 수 있음.
+			printf ("here -- if fst page -- 9\n");
 			struct page *p = spt_find_page (&spt, upage);
 			ASSERT (p != NULL);
 			ASSERT (p->frame != NULL);
+			printf ("here -- if fst page -- 10\n");
 			p->file.size = (read_bytes + zero_bytes) / PGSIZE;
 			DEG_NOTE ("fst", "p=%p frame=%p size=%zu", p, p->frame, p->file.size);
 		}
