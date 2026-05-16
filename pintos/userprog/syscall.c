@@ -341,6 +341,16 @@ syscall_handler (struct intr_frame *f) {
 			goto err_mmap;
 		}
 
+		//TODO: 이게 길이가 너무 길어서 length/2 조건을 추가했는데 최선은 아닌거 같긴 함;;
+		// 나중에 바꾸던가 하기
+		//DEG_NOTE("chk", "addr=%p length=%p KERN_BASE=%p", addr, length, KERN_BASE);
+		if (is_kernel_vaddr (addr + length)
+				|| is_kernel_vaddr (addr)
+				|| is_kernel_vaddr (addr + (length/2))) {
+			goto err_mmap;
+		}
+		//DEG_NOTE("chk", "e1=%d e2=%d", is_kernel_vaddr (addr + length), is_kernel_vaddr (addr));
+
 		if (addr != pg_round_down (addr)) { // 아마 up이든 down이든 상관없을듯? 경계인지가 중요해서
 			goto err_mmap;
 		}
