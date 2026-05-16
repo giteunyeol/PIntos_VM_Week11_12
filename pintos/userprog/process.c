@@ -961,7 +961,7 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-//#else
+#else
 /* 여기부터의 코드는 project 3 이후에 사용된다.
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
@@ -1046,12 +1046,19 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
 	/* TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 점유한다.
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다. */
 	/* TODO: 여기에 코드를 작성한다. */
+	if_->rsp = (uintptr_t)stack_bottom;
+	if (!vm_alloc_page(VM_ANON, stack_bottom, true)){
+		return false;
+	}
+	if (!vm_claim_page(stack_bottom)){
+		return false;
+	}
 
 	return success;
 }
 #endif /* VM */
+
