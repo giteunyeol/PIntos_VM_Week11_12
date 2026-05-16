@@ -56,6 +56,15 @@ struct initd_aux {
 	struct child_status *child_status;
 };
 
+struct aux {
+	struct file *file;
+	void *va;
+	off_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
+
+
 /* initd와 그 외 프로세스에서 공통으로 사용하는 초기화 함수. */
 static void
 process_init (void) {
@@ -961,8 +970,27 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
-}
+	//파일이 있어 aux를 받아 그런데 aux안에 뭐가 또 있어 그걸 꺼내서 적재?
 
+	/* 이 페이지를 어떻게 채울지 계산한다.
+		* FILE에서 PAGE_READ_BYTES 바이트를 읽고
+		* 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
+
+	//struct file *file, off_t new_pos
+	file_seek(aux->file, aux->offset);
+	/* 이 페이지를 적재한다. */
+	if (file_read (aux->file, page->frame->kva, aux->page_read_bytes) != (int) aux->page_read_bytes) {
+		free(aux);
+		return false;
+	}
+
+	uint8_t *vabyte = page->frame->kva;
+	memset (vabyte + aux->page_read_bytes, 0, aux->page_zero_bytes);
+
+	return true;
+
+}
+`
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
  * 총 READ_BYTES + ZERO_BYTES 바이트의 가상 메모리를 다음과 같이
  * 초기화한다:
@@ -991,15 +1019,24 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
-		void *aux = NULL;
+		struct aux *lazy_aux = malloc(sizeof(struct aux));
+		if (lazy_aux == NULL) {
+			return false;
+		}
+		lazy_aux->file = file;
+		lazy_aux->va = upage;
+		lazy_aux->offset = ofs;
+		lazy_aux->read_bytes = page_read_bytes;
+		lazy_aux->zero_bytes = page_zero_bytes;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, lazy_aux))
 			return false;
 
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += PGSIZE;
 	}
 	return true;
 }
@@ -1009,12 +1046,19 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
 	/* TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 점유한다.
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다. */
 	/* TODO: 여기에 코드를 작성한다. */
+	if_->rsp = (uintptr_t)stack_bottom;
+	if (!vm_alloc_page(VM_ANON, stack_bottom, true)){
+		return false;
+	}
+	if (!vm_claim_page(stack_bottom)){
+		return false;
+	}
 
 	return success;
 }
 #endif /* VM */
+
