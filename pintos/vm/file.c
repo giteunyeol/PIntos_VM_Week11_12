@@ -56,7 +56,7 @@ file_backed_destroy (struct page *page) {
 
 /* Do the mmap */
 void *
-do_mmap (void *addr, size_t length, int writable,
+do_mmap (void *addr, size_t u_length, int writable,
 		struct file *file, off_t offset) {
 	struct supplemental_page_table spt = thread_current ()->spt;
 	struct page *page = spt_find_page (&spt, addr);
@@ -68,12 +68,19 @@ do_mmap (void *addr, size_t length, int writable,
 
 	size_t read_bytes;
 	size_t zero_bytes;
-	if (length < f_length) {
-		read_bytes = length;
-		zero_bytes = ROUND_UP(length, PGSIZE) - length;
+	// 페이지 사이즈가 1000
+	// 파일 크기가 2500
+	// 사용자 요청이 3400 이라고 치면
+	// 총 4000 = 2500 / 1500 이여야 함
+	// 반대로 사용자의 파일 크기가 더 작은 경우 일단은 패닉, 나중에 필요하면 고려
+	// u_length: 사용자 요청 길이
+	// f_length: 실제 길이
+	if (u_length >= f_length) {
+		read_bytes = f_length;
+		// f_length를 PGSIZE 단위로 올림.
+		zero_bytes = ROUND_UP(u_length, PGSIZE) - f_length;
 	} else {
-		read_bytes = length;
-		zero_bytes = ROUND_UP(length, PGSIZE) - length;
+		PANIC ("no: u_length >= f_length");
 	}
 
 	if (!load_segment (file, offset, addr, read_bytes, zero_bytes, writable)) {
