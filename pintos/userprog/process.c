@@ -961,7 +961,7 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-//#else
+#else
 /* 여기부터의 코드는 project 3 이후에 사용된다.
  * project 2만 대상으로 구현하려면 위쪽 블록에 구현하라. */
 
@@ -976,21 +976,22 @@ lazy_load_segment (struct page *page, void *aux) {
 		* FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		* 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 
-	//struct file *file, off_t new_pos
-	file_seek(aux->file, aux->offset);
+	struct aux *lazy_aux = aux;
+	file_seek(lazy_aux->file, lazy_aux->offset);
 	/* 이 페이지를 적재한다. */
-	if (file_read (aux->file, page->frame->kva, aux->page_read_bytes) != (int) aux->page_read_bytes) {
-		free(aux);
+	if (file_read (lazy_aux->file, page->frame->kva, lazy_aux->read_bytes) != (int) lazy_aux->read_bytes) {
+		free(lazy_aux);
 		return false;
 	}
 
-	uint8_t *vabyte = page->frame->kva;
-	memset (vabyte + aux->page_read_bytes, 0, aux->page_zero_bytes);
+	uint8_t *frame_start_addr = page->frame->kva;
+	memset(frame_start_addr + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes);
 
+	free(lazy_aux);
 	return true;
 
 }
-`
+
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 적재한다.
  * 총 READ_BYTES + ZERO_BYTES 바이트의 가상 메모리를 다음과 같이
  * 초기화한다:
@@ -1045,12 +1046,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
+	bool alloc_success = false;
+	bool claim_success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
 	/* TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 점유한다.
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다. */
-	/* TODO: 여기에 코드를 작성한다. */
+	/* TODO: 여기에 코드를 작성한다.*/
+	alloc_success = vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true);
+	if (!alloc_success) {
+		return success;
+	}
+	if_->rsp = USER_STACK;
+	claim_success = vm_claim_page(stack_bottom);
+	if (claim_success) {
+		success = true;
+	}
 
 	return success;
 }

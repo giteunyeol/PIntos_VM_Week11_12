@@ -210,7 +210,7 @@ vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
 	struct thread * current = thread_current();
-	page = spt_find_page(&current->spt,va);
+	page = spt_find_page(&current->spt, va);
 	if (page == NULL){
 		return false;
 	}
@@ -229,7 +229,7 @@ vm_do_claim_page (struct page *page) {
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	struct thread *current = thread_current();
-	//공하면 true, 메모리 할당이면 false를 반환합니다
+	//성공하면 true, 메모리 할당이면 false를 반환합니다
 	if (!pml4_set_page(current->pml4, page->va, frame->kva, page->writable)) {
 		free(frame);
 		return false;
