@@ -97,6 +97,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	}
 
 	new_page->writeable = writable;
+	new_page->mmaped_size = 0;
 
 	spt_insert_page (spt, new_page);
 

@@ -331,7 +331,7 @@ syscall_handler (struct intr_frame *f) {
 	//
 	// 유효성 검사 후 락 걸어서 do_mmap에게 넘김, 핵심 처리는 없고 유효성 검사만 좀 함
 	case SYS_MMAP: {
-		void * addr = (void *) f->R.rdi;
+		void *addr = (void *) f->R.rdi;
 		size_t length = f->R.rsi;
 		int writable = (int) f->R.rdx;
 		int fd = (int) f->R.r10;
@@ -392,7 +392,7 @@ syscall_handler (struct intr_frame *f) {
 	// void
 	// munmap (void *addr);
 	case SYS_MUNMAP: {
-		void * addr = (void *) f->R.rdi;
+		void *addr = (void *) f->R.rdi;
 
 		if (addr == NULL) {
 			goto err_munmap;
