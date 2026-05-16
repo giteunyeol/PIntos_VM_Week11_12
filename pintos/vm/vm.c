@@ -60,7 +60,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		if(page == NULL) {
 			return false;
 		}
-		page -> writable = writable;
 		//타입에따라서 변수에 실행할 함수를 저장해주고 그걸 넘기라고?
 		bool (*initializer)(struct page *, enum vm_type, void *);
 		if(VM_TYPE(type) == VM_ANON) {
@@ -69,8 +68,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		else if(VM_TYPE(type) == VM_FILE) {
 			initializer = file_backed_initializer;
 		}
-		uninit_new(page, upage, init, type, aux, initializer);
+			uninit_new(page, upage, init, type, aux, initializer); // 방금 만든 Page를 uninit page(실제 내용이 램에 올라오지 않은 페이지)로 세팅
+		page -> writable = writable;
 		/* TODO: Insert the page into the spt. */
+		//페이지 구조체를 현재 프로세스의 spt에 넣음.
 		if(!spt_insert_page(spt, page)) {
 			free(page);
 			return false;
@@ -87,7 +88,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page page;
 	va = pg_round_down(va); //va에 패딩 맞춰줌
 	page.va = va;
-	struct hash_elem *e = hash_find(spt->pages, &page.elem);
+	struct hash_elem *e = hash_find(&spt->pages, &page.elem);
 	/* TODO: Fill this function. */
 	//해당 주소를 가지고 있는 페이지가 있는지 해시를 뒤져서
 	//있으면 그 페이지 떤져주고, 없으면 에러(널 리턴)
@@ -103,7 +104,7 @@ spt_insert_page (struct supplemental_page_table *spt,
 		struct page *page) {
 	/* TODO: Fill this function. */
 	//spt에 페이지를 삽입 하는데, 이게 있는지 체크해서 없으면 넣기, (중복 페이지가)있으면 false리턴
-	if(hash_insert(spt->pages, &page->elem) == NULL) {
+	if(hash_insert(&spt->pages, &page->elem) == NULL) {
 		return true;
 	}
 	return false;
@@ -111,7 +112,7 @@ spt_insert_page (struct supplemental_page_table *spt,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	if (hash_delete(spt->pages, &page->elem)) {
+	if (hash_delete(&spt->pages, &page->elem)) {
 		vm_dealloc_page (page);
 	}
 	return;
@@ -220,7 +221,7 @@ vm_claim_page (void *va) {
 
 /* Claim the PAGE and set up the mmu. */
 static bool
-vm_do_claim_page (struct page *page) {
+vm_do_claim_page (struct page *page) { //램에 올려주는 함수
 	struct frame *frame = vm_get_frame ();
 
 	/* Set links */
@@ -241,7 +242,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(spt->pages, page_hash, page_less, NULL);
+	hash_init(&spt->pages, page_hash, page_less, NULL);
 }
 /* Copy supplemental page table from src to dst */
 bool
