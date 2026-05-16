@@ -292,7 +292,7 @@ vm_dealloc_page (struct page *page) {
 /* Claim the page that allocate on VA. */
 bool
 vm_claim_page (void *va) {
-	DEG_CALL ("va=%p", va);
+	//DEG_CALL ("va=%p", va);
 	struct page *page = NULL;
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
@@ -300,7 +300,7 @@ vm_claim_page (void *va) {
 
 	ASSERT (page != NULL);
 	bool result = vm_do_claim_page (page);
-	DEG_RETURN ("value=%d page=%p", result, (void *) page);
+	//DEG_RETURN ("value=%d page=%p", result, (void *) page);
 	return result;
 }
 
