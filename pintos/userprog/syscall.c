@@ -379,13 +379,17 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
+	bool is_user_addr = ptr != NULL && is_user_vaddr(ptr);
 
-	void *mapped = ptr != NULL && is_user_vaddr(ptr)
-		? pml4_get_page(cur->pml4, ptr)
-		: NULL;
-	if (ptr == NULL || !is_user_vaddr(ptr) || mapped == NULL) {
-		DEG_NOTE ("badptr", "ptr=%p is_user=%d mapped=%p pml4=%p",
-				ptr, ptr != NULL ? is_user_vaddr(ptr) : 0, mapped, cur->pml4);
+	if (is_user_addr) {
+		if(!pml4_get_page(cur->pml4, ptr)) {
+			if (!vm_claim_page((void *) ptr)) {
+				kill_process_due_to_bad_user_memory();
+			} 
+		}
+	} else {
+		DEG_NOTE("badptr", "ptr=%p is_user=%d pml4=%p",
+				 ptr, is_user_addr, cur->pml4);
 		kill_process_due_to_bad_user_memory();
 	}
 }
