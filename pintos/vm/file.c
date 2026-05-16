@@ -48,11 +48,9 @@ file_backed_swap_out (struct page *page) {
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
-	//if (pml4_is_dirty(thread_current ()->pml4, TODO)) {
-		//file_write (TODO, TODO_VA, PGSIZE);
-	//}
-	// file_close (TODO); // 내부에서 file free도 해줌
+	struct file_page *file_page = &page->file;
+
+	file_close (file_page->file);
 }
 
 /* Do the mmap */
@@ -117,20 +115,21 @@ do_munmap (void *addr) {
 
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = spt_find_page (spt, addr);
-	bool is_not_head = page->mmaped_size <= 0;
+	uint64_t mmaped_size = page->mmaped_size;
+	bool is_not_head = mmaped_size <= 0;
 	DEG_BRANCH ("is_not_head", is_not_head);
 	if (is_not_head) {
-		DEG_RETURN ("void cause=not_head mmaped_size=%d", page->mmaped_size);
+		DEG_RETURN ("void cause=not_head mmaped_size=%d", mmaped_size);
 		return;
 	}
 
-	DEG_LOOP_START ("dealloc pages", "mmaped_size=%d", page->mmaped_size);
-	for (int i = 0; i < page->mmaped_size; i++) {
+	DEG_LOOP_START ("dealloc pages", "mmaped_size=%d", mmaped_size);
+	for (int i = 0; i < mmaped_size; i++) {
 		page = spt_find_page (spt, addr + (i * PGSIZE));
 		DEG_LOOP ("dealloc pages", "i=%d page=%p va=%p",
 				i, (void *) page, page->va);
 		vm_dealloc_page (page);
 	}
-	DEG_LOOP_END ("dealloc pages", "mmaped_size=%d", page->mmaped_size);
+	DEG_LOOP_END ("dealloc pages", "mmaped_size=%d", mmaped_size);
 	DEG_RETURN ("void");
 }

@@ -1010,6 +1010,8 @@ lazy_load_segment (struct page *page, void *aux_) {
 		// return false;
 	}
 
+	page->file.file = file;
+
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 	free (aux);
 	DEG_RETURN ("value=true");
@@ -1055,7 +1057,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		struct page_lazy_load_aux *aux = malloc (sizeof *aux);
 		ASSERT(aux != NULL); // 일단 검증
-		aux->file = file;
+		aux->file = file_duplicate (file); // 생명주기 문제로 복사, 호출자가 파일을 닫은 시점에
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
