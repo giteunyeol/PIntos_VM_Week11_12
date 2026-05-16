@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include "debug_trace.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -60,8 +61,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		if(page == NULL) {
 			return false;
 		}
-		page -> writable = writable;
-		//타입에따라서 변수에 실행할 함수를 저장해주고 그걸 넘기라고?
+	
 		bool (*initializer)(struct page *, enum vm_type, void *);
 		if(VM_TYPE(type) == VM_ANON) {
 			initializer = anon_initializer;
@@ -70,6 +70,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			initializer = file_backed_initializer;
 		}
 		uninit_new(page, upage, init, type, aux, initializer);
+		page->writable = writable;
 		/* TODO: Insert the page into the spt. */
 		if(!spt_insert_page(spt, page)) {
 			free(page);
@@ -87,14 +88,15 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page page;
 	va = pg_round_down(va); //va에 패딩 맞춰줌
 	page.va = va;
-	struct hash_elem *e = hash_find(spt->pages, &page.elem);
+	struct hash_elem *e = hash_find(&spt->pages, &page.elem);
 	/* TODO: Fill this function. */
 	//해당 주소를 가지고 있는 페이지가 있는지 해시를 뒤져서
 	//있으면 그 페이지 떤져주고, 없으면 에러(널 리턴)
 	if (!e) {
 		return NULL;
 	}
-	return hash_entry(e, struct page, elem); //해시 뒤졌는데 페이지 찾음
+	struct page *found = hash_entry(e, struct page, elem);
+	return found; //해시 뒤졌는데 페이지 찾음
 }
 
 /* Insert PAGE into spt with validation. */
@@ -103,7 +105,8 @@ spt_insert_page (struct supplemental_page_table *spt,
 		struct page *page) {
 	/* TODO: Fill this function. */
 	//spt에 페이지를 삽입 하는데, 이게 있는지 체크해서 없으면 넣기, (중복 페이지가)있으면 false리턴
-	if(hash_insert(spt->pages, &page->elem) == NULL) {
+	struct hash_elem *old = hash_insert(&spt->pages, &page->elem);
+	if(old == NULL) {
 		return true;
 	}
 	return false;
@@ -111,7 +114,7 @@ spt_insert_page (struct supplemental_page_table *spt,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	if (hash_delete(spt->pages, &page->elem)) {
+	if (hash_delete(&spt->pages, &page->elem)) {
 		vm_dealloc_page (page);
 	}
 	return;
@@ -241,7 +244,10 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(spt->pages, page_hash, page_less, NULL);
+	DEG_CALL ("spt=%p pages_addr=%p", spt, &spt->pages);
+	hash_init(&spt->pages, page_hash, page_less, NULL);
+	DEG_RETURN ("value=void buckets=%p elem_cnt=%d",
+			spt->pages.buckets, (int) spt->pages.elem_cnt);
 }
 /* Copy supplemental page table from src to dst */
 bool

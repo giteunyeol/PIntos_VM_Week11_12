@@ -20,6 +20,7 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "intrinsic.h"
+#include "debug_trace.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -651,9 +652,12 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	DEG_CALL ("file_name=\"%s\" if_=%p thread=%p",
+			file_name != NULL ? file_name : "(null)", if_, t);
 	/* file_name 파싱을 위한 copy 만들기 */
 	char *file_name_copy = palloc_get_page(0);
 	if (file_name_copy == NULL) {
+		DEG_NOTE ("goto", "reason=file_name_copy-null");
 		goto done;
 	}
 	strlcpy(file_name_copy, file_name, PGSIZE);
@@ -662,28 +666,36 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *save_ptr;
 	char *token = strtok_r(file_name_copy, " ", &save_ptr);
 	if (token == NULL) {
+		DEG_NOTE ("goto", "reason=no-token");
 		goto done;
 	}
 	int argc = 0;
 	while (token != NULL && argc < 63 ) {
+		DEG_LOOP ("parse argv", "argc=%d token=\"%s\"", argc, token);
 		argv[argc] = token;
 		argc++;
 		token = strtok_r(NULL, " ", &save_ptr);
 	}
 	argv[argc] = NULL; // 배열의 마지막 값은 NULL로 설정
+	DEG_NOTE ("argv", "argc=%d argv0=\"%s\"", argc, argv[0]);
 
 	/* 페이지 디렉터리를 할당하고 활성화한다. */
 	t->pml4 = pml4_create ();
-	if (t->pml4 == NULL)
+	DEG_NOTE ("pml4", "created pml4=%p", t->pml4);
+	if (t->pml4 == NULL) {
+		DEG_NOTE ("goto", "reason=pml4-null");
 		goto done;
+	}
 	process_activate (thread_current ());
 
 	/* Open executable file. */
 	file = filesys_open (argv[0]);
 	if (file == NULL) {
+		DEG_NOTE ("goto", "reason=open-fail argv0=\"%s\"", argv[0]);
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	DEG_NOTE ("file", "opened file=%p argv0=\"%s\"", file, argv[0]);
 
 	file_deny_write(file);
 
@@ -730,6 +742,10 @@ load (const char *file_name, struct intr_frame *if_) {
 					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
 					uint64_t page_offset = phdr.p_vaddr & PGMASK;
 					uint32_t read_bytes, zero_bytes;
+					DEG_NOTE ("phdr", "type=LOAD writable=%d file_page=%p mem_page=%p page_offset=%p filesz=%d memsz=%d",
+							writable, (void *) file_page, (void *) mem_page,
+							(void *) page_offset, (int) phdr.p_filesz,
+							(int) phdr.p_memsz);
 					if (phdr.p_filesz > 0) {
 						/* 일반 세그먼트.
 						 * 앞부분은 디스크에서 읽고 나머지는 0으로 채운다. */
@@ -742,9 +758,15 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					DEG_NOTE ("seg", "file_page=%p mem_page=%p read_bytes=%u zero_bytes=%u writable=%d",
+							(void *) file_page, (void *) mem_page,
+							read_bytes, zero_bytes, writable);
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
+					{
+						DEG_NOTE ("goto", "reason=load-segment-fail mem_page=%p", (void *) mem_page);
 						goto done;
+					}
 				}
 				else
 					goto done;
@@ -753,11 +775,16 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* 스택을 설정한다. */
-	if (!setup_stack (if_))
+	DEG_NOTE ("stack", "before setup_stack rsp=%p", (void *) if_->rsp);
+	if (!setup_stack (if_)) {
+		DEG_NOTE ("goto", "reason=setup-stack-fail");
 		goto done;
+	}
+	DEG_NOTE ("stack", "after setup_stack rsp=%p", (void *) if_->rsp);
 
 	/* 시작 주소를 설정한다. */
 	if_->rip = ehdr.e_entry;
+	DEG_NOTE ("entry", "rip=%p", (void *) if_->rip);
 
 	/* Implement argument passing (see project2/argument_passing.html). */
 	/* 스택에 토큰 올리기 */
@@ -773,6 +800,8 @@ load (const char *file_name, struct intr_frame *if_) {
 		memcpy((void *)if_->rsp, argv[j], str_len);
 
 		arg_addr[j] = (char *)if_->rsp;
+		DEG_LOOP ("push str", "j=%d arg=\"%s\" len=%d rsp=%p",
+				j, argv[j], (int) str_len, (void *) if_->rsp);
 		j++;
 	}
 
@@ -781,11 +810,13 @@ load (const char *file_name, struct intr_frame *if_) {
 		if_->rsp--;
 		*(uint8_t *)if_->rsp = 0;
 	}
+	DEG_NOTE ("align", "rsp=%p", (void *) if_->rsp);
 
 	// 맨 처음 NULL 삽입
 	if_->rsp -= 8;
 	char *null_ptr = NULL;
 	memcpy((void *)if_->rsp, &null_ptr, sizeof(null_ptr));
+	DEG_NOTE ("argv", "pushed null sentinel rsp=%p", (void *) if_->rsp);
 
 
 	// rsp를 늘리고 agrv 역순으로 삽입 반복 until argc == 0
@@ -793,10 +824,13 @@ load (const char *file_name, struct intr_frame *if_) {
 		j--;
 		if_->rsp -= 8;
 		memcpy((void *)if_->rsp, &arg_addr[j], sizeof(arg_addr[j]));
+		DEG_LOOP ("push ptr", "j=%d arg_addr=%p rsp=%p",
+				j, arg_addr[j], (void *) if_->rsp);
 	}
 
 	// argv 시작 주소
 	char **argv_addr = (char **) if_->rsp;
+	DEG_NOTE ("argv", "argv_addr=%p argc=%d", argv_addr, argc);
 
 	// 마지막에 가짜 return 주소 삽입
 	char *fake_rex = 0;
@@ -805,6 +839,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	if_->R.rdi = argc;
 	if_->R.rsi = (uint64_t)argv_addr;
+	DEG_NOTE ("regs", "argc=%d rdi=%p rsi=%p final_rsp=%p",
+			argc, (void *) if_->R.rdi, (void *) if_->R.rsi, (void *) if_->rsp);
 	success = true;
 
 	t->exec_file = file;
@@ -812,6 +848,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
+	DEG_RETURN ("value=%d file=%p file_name_copy=%p rip=%p rsp=%p",
+			success, file, file_name_copy, (void *) if_->rip, (void *) if_->rsp);
 	if (!success && file != NULL) {
 		file_close (file);
 	}
@@ -967,6 +1005,9 @@ install_page (void *upage, void *kpage, bool writable) {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
+	DEG_CALL ("page=%p va=%p frame=%p aux=%p",
+			page, page != NULL ? page->va : NULL,
+			page != NULL ? page->frame : NULL, aux);
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
@@ -977,9 +1018,15 @@ lazy_load_segment (struct page *page, void *aux) {
 		* 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 
 	struct aux *lazy_aux = aux;
+	DEG_NOTE ("aux", "file=%p va=%p offset=%d read=%d zero=%d",
+			lazy_aux->file, lazy_aux->va, (int) lazy_aux->offset,
+			(int) lazy_aux->read_bytes, (int) lazy_aux->zero_bytes);
 	file_seek(lazy_aux->file, lazy_aux->offset);
 	/* 이 페이지를 적재한다. */
 	if (file_read (lazy_aux->file, page->frame->kva, lazy_aux->read_bytes) != (int) lazy_aux->read_bytes) {
+		DEG_RETURN ("value=0 reason=file-read-fail kva=%p read=%d",
+				page->frame != NULL ? page->frame->kva : NULL,
+				(int) lazy_aux->read_bytes);
 		free(lazy_aux);
 		return false;
 	}
@@ -988,6 +1035,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	memset(frame_start_addr + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes);
 
 	free(lazy_aux);
+	DEG_RETURN ("value=1 page=%p va=%p kva=%p", page, page->va, frame_start_addr);
 	return true;
 
 }
@@ -1008,6 +1056,8 @@ lazy_load_segment (struct page *page, void *aux) {
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+	DEG_CALL ("file=%p ofs=%d upage=%p read_bytes=%u zero_bytes=%u writable=%d",
+			file, (int) ofs, upage, read_bytes, zero_bytes, writable);
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
@@ -1018,10 +1068,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		DEG_LOOP ("segment", "upage=%p ofs=%d page_read=%d page_zero=%d remain_read=%u remain_zero=%u",
+				upage, (int) ofs, (int) page_read_bytes,
+				(int) page_zero_bytes, read_bytes, zero_bytes);
 
 		/* TODO: lazy_load_segment에 전달할 정보를 담은 aux를 준비한다. */
 		struct aux *lazy_aux = malloc(sizeof(struct aux));
 		if (lazy_aux == NULL) {
+			DEG_RETURN ("value=0 reason=aux-malloc-fail upage=%p", upage);
 			return false;
 		}
 		lazy_aux->file = file;
@@ -1030,8 +1084,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		lazy_aux->read_bytes = page_read_bytes;
 		lazy_aux->zero_bytes = page_zero_bytes;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, lazy_aux))
+					writable, lazy_load_segment, lazy_aux)) {
+			DEG_RETURN ("value=0 reason=vm-alloc-fail upage=%p aux=%p", upage, lazy_aux);
 			return false;
+		}
 
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
@@ -1039,6 +1095,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		upage += PGSIZE;
 		ofs += PGSIZE;
 	}
+	DEG_RETURN ("value=1");
 	return true;
 }
 
@@ -1049,21 +1106,28 @@ setup_stack (struct intr_frame *if_) {
 	bool alloc_success = false;
 	bool claim_success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	DEG_CALL ("if_=%p user_stack=%p stack_bottom=%p",
+			if_, (void *) USER_STACK, stack_bottom);
 
 	/* TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 점유한다.
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
 	 * TODO: 해당 페이지를 스택 페이지로 표시해야 한다. */
 	/* TODO: 여기에 코드를 작성한다.*/
 	alloc_success = vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true);
+	DEG_NOTE ("alloc", "stack_bottom=%p alloc_success=%d", stack_bottom, alloc_success);
 	if (!alloc_success) {
+		DEG_RETURN ("value=0 reason=alloc-fail stack_bottom=%p", stack_bottom);
 		return success;
 	}
 	if_->rsp = USER_STACK;
 	claim_success = vm_claim_page(stack_bottom);
+	DEG_NOTE ("claim", "stack_bottom=%p claim_success=%d rsp=%p",
+			stack_bottom, claim_success, (void *) if_->rsp);
 	if (claim_success) {
 		success = true;
 	}
 
+	DEG_RETURN ("value=%d rsp=%p stack_bottom=%p", success, (void *) if_->rsp, stack_bottom);
 	return success;
 }
 #endif /* VM */
