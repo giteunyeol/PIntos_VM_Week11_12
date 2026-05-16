@@ -1031,9 +1031,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, // 가상 주소 upage에 해당하는 페이지 정보를 만들어서 SPT에 등록하는 함수
 					writable, lazy_load_segment, lazy_aux))
 			return false;
-
-		/* 다음 페이지로 진행한다. */
-		read_bytes -= page_read_bytes;
+		
+			/* 다음 페이지로 진행한다. */
+			read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 		ofs += PGSIZE;
