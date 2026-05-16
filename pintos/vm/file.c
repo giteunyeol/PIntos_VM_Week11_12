@@ -3,6 +3,7 @@
 #include "round.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
 #include "vm/vm.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
@@ -63,12 +64,21 @@ do_mmap (void *addr, size_t length, int writable,
 		return NULL;
 	}
 
-	size_t read_bytes = length;
-	size_t zero_bytes = ROUND_UP(length, PGSIZE) - length;
-	//
-	// if (!load_segment(file, offset, addr, read_bytes, zero_bytes, writable)) {
-	// 	return NULL;
-	// }
+	off_t f_length = file_length (file);
+
+	size_t read_bytes;
+	size_t zero_bytes;
+	if (length < f_length) {
+		read_bytes = length;
+		zero_bytes = ROUND_UP(length, PGSIZE) - length;
+	} else {
+		read_bytes = length;
+		zero_bytes = ROUND_UP(length, PGSIZE) - length;
+	}
+
+	if (!load_segment (file, offset, addr, read_bytes, zero_bytes, writable)) {
+		return NULL;
+	}
 
 	return addr;
 }

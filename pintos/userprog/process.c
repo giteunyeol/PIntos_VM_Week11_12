@@ -635,9 +635,6 @@ struct ELF64_PHDR {
 
 static bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
-static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes,
-		bool writable);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
@@ -1001,7 +998,12 @@ lazy_load_segment (struct page *page, void *aux_) {
 	uint32_t page_read_bytes = aux->read_bytes;
 	uint32_t page_zero_bytes = aux->zero_bytes;
 	file_seek (file, ofs);
-	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+	DEG_NOTE ("aux", "ofs=%lld kpage=%p page_read_bytes=%lld page_zero_bytes=%lld",
+				ofs, kpage, page_read_bytes, page_zero_bytes);
+	int bytes_read = file_read (file, kpage, page_read_bytes);
+	DEG_NOTE ("aux", "bytes_read=%lld page_read_bytes=%lld",
+				bytes_read, page_read_bytes);
+	if (bytes_read != (int) page_read_bytes) {
 		PANIC ("FAIL in file_read");
 		// free (aux); // 아직 할당된거 없으니까 이거만 하면 됨
 		// DEG_RETURN ("value=false cause=file_read");
@@ -1027,7 +1029,7 @@ lazy_load_segment (struct page *page, void *aux_) {
  *
  * 성공하면 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가 나면
  * false를 반환한다. */
-static bool
+bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	DEG_CALL ("file=%p ofs=%lld upage=%p read_bytes=%u zero_bytes=%u writable=%d",
