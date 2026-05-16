@@ -9,7 +9,6 @@ struct page_lazy_load_aux {
     off_t ofs;
     size_t read_bytes;
     size_t zero_bytes;
-    size_t is_first_page;
 };
 
 tid_t process_create_initd (const char *file_name);

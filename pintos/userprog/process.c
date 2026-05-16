@@ -982,11 +982,11 @@ lazy_load_segment (struct page *page, void *aux_) {
 	/* TODO: 파일에서 세그먼트를 적재한다. */
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: VA는 이 함수가 호출될 때 사용할 수 있다. */
-	printf ("lazy_load_segment -- 4\n");
+	printf ("here -- 4\n");
 	DEG_CALL("page=%p aux=%p va=%p", page, aux_, page->va);
-	printf ("lazy_load_segment -- 5\n");
+	printf ("here -- 5\n");
 	struct page_lazy_load_aux *aux = aux_;
-	printf ("lazy_load_segment -- 6\n");
+	printf ("here -- 6\n");
 
 	if (!vm_claim_page (page->va)) {
 		PANIC ("FAIL in vm_claim_page");
@@ -994,8 +994,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 		// free (aux);
 		// DEG_RETURN ("value=false cause=vm_claim_page");
 	}
-
-	printf ("lazy_load_segment -- 7\n");
+	printf ("here -- 7\n");
 
 	struct file *file = aux->file;
 	off_t ofs = aux->ofs;
@@ -1005,12 +1004,10 @@ lazy_load_segment (struct page *page, void *aux_) {
 	DEG_NOTE ("aux", "file=%p ofs=%lld kpage=%p read_bytes=%u zero_bytes=%u",
 	          file, (long long) ofs, (void *) kpage, page_read_bytes, page_zero_bytes);
 	file_seek (file, ofs);
-	off_t bytes_read = file_read (file, kpage, page_read_bytes);
+	int bytes_read = file_read (file, kpage, page_read_bytes);
 	bool is_diff_read = bytes_read != (int) page_read_bytes;
 	DEG_NOTE ("aux", "bytes_read=%d expected=%u is_diff=%d",
 	          bytes_read, page_read_bytes, (int) is_diff_read);
-	printf ("lazy_load_segment -- expected=%lld bytes_read=%lld\n",
-				page_read_bytes, bytes_read);
 	if (is_diff_read) {
 		PANIC ("FAIL in file_read");
 		// free (aux); // 아직 할당된거 없으니까 이거만 하면 됨
@@ -1075,7 +1072,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
-		aux->is_first_page = is_frist_page;
 		if (!vm_alloc_page_with_initializer (VM_FILE, upage, writable,
 					lazy_load_segment, aux)) {
 			//TODO: 이것도 꼭 해야하나 싶긴 함. 실패하는걸 고려해야하나? 일단은 안하고 나중에...
@@ -1085,15 +1081,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		DEG_BRANCH ("is_frist_page", is_frist_page);
 		if (is_frist_page) {
-			printf ("load_segment -- if fst page -- 8\n");
+			printf ("here -- if fst page -- 8\n");
 			is_frist_page = false;
-			printf ("load_segment -- if fst page -- 9\n");
+			vm_claim_page (upage); // 파일로 처리되어야 값을 쓸 수 있음.
+			printf ("here -- if fst page -- 9\n");
 			struct page *p = spt_find_page (&spt, upage);
-			lazy_load_segment (p, aux);
 			ASSERT (p != NULL);
-			printf ("load_segment -- if fst page -- 10\n");
+			ASSERT (p->frame != NULL);
+			printf ("here -- if fst page -- 10\n");
 			p->file.size = (read_bytes + zero_bytes) / PGSIZE;
-			DEG_NOTE ("fst", "p=%p frame=%p size=%d", p, p->frame, p->file.size);
+			DEG_NOTE ("fst", "p=%p frame=%p size=%zu", p, p->frame, p->file.size);
 		}
 
 		/* 다음 페이지로 진행한다. */
