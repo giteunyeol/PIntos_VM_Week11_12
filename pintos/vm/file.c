@@ -89,8 +89,8 @@ do_mmap (void *addr, size_t u_length, int writable,
 		// f_length를 PGSIZE 단위로 올림.
 		zero_bytes = ROUND_UP(u_length, PGSIZE) - f_length;
 	} else {
-		DEG_RETURN ("value=%p cause=overlay", NULL);
-		return NULL;
+		read_bytes = u_length; // 이미 정렬되었으므로
+		zero_bytes = 0;
 	}
 
 	DEG_NOTE ("chk", "read_bytes=%zu zero_bytes=%zu", read_bytes, zero_bytes);

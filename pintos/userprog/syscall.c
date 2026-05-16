@@ -345,6 +345,10 @@ syscall_handler (struct intr_frame *f) {
 			goto err_mmap;
 		}
 
+		if (offset % PGSIZE != 0) {
+			goto err_mmap;
+		}
+
 		// 이거 page 단위로 넘겨가며 검사, addr이 경계 영역이라 ㄱㅊ
 		for (size_t i = 0; i < length; i += PGSIZE) {
 			bool is_alloced = spt_find_page (&spt, addr + i) != NULL;
