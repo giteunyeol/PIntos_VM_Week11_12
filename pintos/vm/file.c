@@ -49,6 +49,9 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page = &page->file;
+	struct supplemental_page_table *spt = &thread_current()->spt;
+
+	spt_remove_page (spt, page);
 
 	file_close (file_page->file);
 }

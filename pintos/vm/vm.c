@@ -15,7 +15,6 @@ static bool spt_hash_cmp_va_less(const struct hash_elem *a,
 		const struct hash_elem *b, void *aux UNUSED);
 static uint64_t spt_hash_hash(const struct hash_elem *e, void *aux UNUSED);
 static void spt_hash_destroy_item (struct hash_elem *e, void *aux UNUSED);
-static void destroy_frame_if_exists(struct page *page);
 static void init_frame_table(void);
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -420,7 +419,7 @@ static void init_frame_table(void) {
 	DEG_RETURN ("void");
 }
 
-static void
+void
 destroy_frame_if_exists(struct page* page) {
 	if (page->frame != NULL) {
 		list_remove(&page->frame->elem);

@@ -118,4 +118,6 @@ enum vm_type page_get_type (struct page *page);
 
 bool validate_stack_area (uintptr_t rsp, void* addr);
 
+void destroy_frame_if_exists(struct page *page);
+
 #endif  /* VM_VM_H */
