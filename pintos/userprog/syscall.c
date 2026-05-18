@@ -207,7 +207,7 @@ syscall_handler (struct intr_frame *f) {
 
 	case SYS_WRITE: {
 		int fd = (int) f->R.rdi;
-		const void *buffer = (const void *) f->R.rsi;
+		const char *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
 		DEG_NOTE ("write", "fd=%d buffer=%p size=%d", fd, buffer, (int) size);
 
