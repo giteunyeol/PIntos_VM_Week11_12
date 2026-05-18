@@ -194,7 +194,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	if (page == NULL) {
 		if (USER_STACK - STACK_LIMIT <= address  && address < USER_STACK && address >= user_rsp - 8) {
 			vm_stack_growth(pg_round_down(addr));
-			page = spt_find_page(spt, address);
+			page = spt_find_page(spt, addr);
 		} else {
 			return false;
 		}
