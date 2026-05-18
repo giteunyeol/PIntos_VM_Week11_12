@@ -160,7 +160,7 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
 }
 
 /* Handle the fault on write_protected page */
@@ -173,29 +173,41 @@ bool
 vm_try_handle_fault (struct intr_frame *f, void *addr,
 		bool user, bool write, bool not_present) {
 
-	if(addr == NULL) {
-		return false;
-	}
-	if(!is_user_vaddr(addr)) {
-		return false;
-	}
 	if(!not_present) {
 		return false; 
 	}
 	//write얘는 페이지가 존재하는지 안하는지 근데 우리가 페이지 안에 writable선언
-	//그건 읽기모드인지
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	struct page * page = spt_find_page(spt, addr);
-	if(page == NULL) {
+	struct thread *cur = thread_current();
+	uintptr_t address = (uintptr_t)addr;
+	uintptr_t user_rsp;
+
+	if (user) {
+		user_rsp = f->rsp;
+	} else {
+		user_rsp = cur->saved_user_rsp;
+	}
+	struct page *page = spt_find_page(spt, address);
+
+	if (page == NULL) {
+		if (USER_STACK - STACK_LIMIT <= address  && address < USER_STACK && address >= user_rsp - 8) {
+			vm_stack_growth(pg_round_down(addr));
+			page = spt_find_page(spt, address);
+		} else {
+			return false;
+		}
+	}
+
+	if (page == NULL) {
 		return false;
 	}
-	//page내부에서 writable이 true면 쓰기모드, false면 읽기모드
-	//받아온 변수(write)가 true면 쓰기모드
-	if(!(page->writable) && write) {
+
+	if (!(page->writable) && write) {
 		return false;
 	}
+
 	return vm_do_claim_page (page);
 }
 

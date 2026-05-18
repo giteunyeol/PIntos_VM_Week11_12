@@ -139,6 +139,7 @@ find_fd_entry(int fd) {
 void
 syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
+	thread_current()->saved_user_rsp = f->rsp;
 
 	struct thread *t = thread_current();
 	DEG_CALL ("sysno=%llu rdi=%p rsi=%p rdx=%p thread=%p",

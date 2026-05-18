@@ -18,6 +18,7 @@
 #define PGSHIFT 0                          /* 첫 번째 오프셋 비트의 인덱스. */
 #define PGBITS  12                         /* 오프셋 비트 수. */
 #define PGSIZE  (1 << PGBITS)              /* 한 페이지의 바이트 수. */
+#define STACK_LIMIT (1 << 20)				/* 유저스택 최대 크기 */
 #define PGMASK  BITMASK(PGSHIFT, PGBITS)   /* 페이지 오프셋 비트(0:12). */
 
 /* 페이지 내부 오프셋. */
