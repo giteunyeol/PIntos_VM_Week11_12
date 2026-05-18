@@ -161,6 +161,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr) {
+	vm_alloc_page(VM_ANON, addr, true);
 }
 
 /* Handle the fault on write_protected page */
@@ -189,7 +190,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	} else {
 		user_rsp = cur->saved_user_rsp;
 	}
-	struct page *page = spt_find_page(spt, address);
+	struct page *page = spt_find_page(spt, addr);
 
 	if (page == NULL) {
 		if (USER_STACK - STACK_LIMIT <= address  && address < USER_STACK && address >= user_rsp - 8) {
@@ -198,10 +199,6 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		} else {
 			return false;
 		}
-	}
-
-	if (page == NULL) {
-		return false;
 	}
 
 	if (!(page->writable) && write) {
