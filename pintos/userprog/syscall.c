@@ -241,7 +241,7 @@ syscall_handler (struct intr_frame *f) {
 		/* read(fd, buffer, size)의 인자는 syscall_entry가 저장한 레지스터에서
 		 * 꺼낸다. rdi는 fd, rsi는 사용자 버퍼 주소, rdx는 읽을 바이트 수다.
 		 * 시스템 콜 반환값도 rax로 돌아가므로 read() 결과를 f->R.rax에 저장한다. */
-		//buffer : 읽은 데이터를 써 넣을 목적지 
+		//buffer : 읽은 데이터를 써 넣을 목적지
 		const char *buffer = (const void *)f->R.rsi;
 		DEG_NOTE ("read", "fd=%d buffer=%p size=%u",
 				(int) f->R.rdi, buffer, (unsigned) f->R.rdx);
