@@ -19,6 +19,7 @@
 #include "threads/mmu.h"
 #include "threads/malloc.h"
 #include "debug_trace.h"
+#include "vm/vm.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -142,15 +143,11 @@ syscall_handler (struct intr_frame *f) {
 	thread_current()->saved_user_rsp = f->rsp;
 
 	struct thread *t = thread_current();
-	DEG_CALL ("sysno=%llu rdi=%p rsi=%p rdx=%p thread=%p",
-			(unsigned long long) f->R.rax,
-			(void *) f->R.rdi, (void *) f->R.rsi, (void *) f->R.rdx, t);
 
 	switch (f->R.rax)
 	{
 	case SYS_EXIT: {
 		uint64_t status = f->R.rdi;
-		DEG_NOTE ("exit", "status=%d", (int) status);
 		t->exit_status = status;
 		thread_exit ();
 		break;
@@ -210,7 +207,6 @@ syscall_handler (struct intr_frame *f) {
 		const char *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
 		DEG_NOTE ("write", "fd=%d buffer=%p size=%d", fd, buffer, (int) size);
-
 		if (size == 0) {
 			f->R.rax = 0;
 			DEG_NOTE ("write", "return=0 reason=zero-size");
@@ -245,7 +241,18 @@ syscall_handler (struct intr_frame *f) {
 		/* read(fd, buffer, size)의 인자는 syscall_entry가 저장한 레지스터에서
 		 * 꺼낸다. rdi는 fd, rsi는 사용자 버퍼 주소, rdx는 읽을 바이트 수다.
 		 * 시스템 콜 반환값도 rax로 돌아가므로 read() 결과를 f->R.rax에 저장한다. */
+		//buffer : 읽은 데이터를 써 넣을 목적지 
+		const char *buffer = (const void *)f->R.rsi;
+		DEG_NOTE ("read", "fd=%d buffer=%p size=%u",
+				(int) f->R.rdi, buffer, (unsigned) f->R.rdx);
+		struct page *page = spt_find_page(&thread_current()->spt, (void *) buffer);
+		if (page && !page->writable) {
+			DEG_NOTE ("read", "kill reason=readonly-page page=%p buffer=%p",
+					page, buffer);
+			kill_process_due_to_bad_user_memory();
+		}
 		f->R.rax = read((int) f->R.rdi, (void *) f->R.rsi, (unsigned) f->R.rdx);
+		DEG_NOTE ("read", "return=%d", (int) f->R.rax);
 		break;
 	}
 
@@ -347,10 +354,8 @@ syscall_handler (struct intr_frame *f) {
 static bool copy_in_string (char *buf, const char *command, size_t size) {
     size_t i;
     struct thread *t = thread_current ();
-	DEG_CALL ("buf=%p command=%p size=%d", buf, command, (int) size);
 
     if (command == NULL) {
-		DEG_RETURN ("value=0 reason=null-command");
         return false;
 	}
 
@@ -358,22 +363,18 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
         const char *uaddr = command + i;
 
         if (!is_user_vaddr (uaddr)) {
-			DEG_RETURN ("value=0 reason=kernel-addr uaddr=%p", uaddr);
             return false;
 		}
         if (pml4_get_page(t->pml4, uaddr) == NULL) {
-			DEG_RETURN ("value=0 reason=unmapped uaddr=%p pml4=%p", uaddr, t->pml4);
             return false;
 		}
 
         buf[i] = *uaddr;
         if (buf[i] == '\0') {
-			DEG_RETURN ("value=1 copied=%d", (int) i + 1);
             return true;
 		}
     }
 
-	DEG_RETURN ("value=0 reason=no-null size=%d", (int) size);
     return false;
 }
 
@@ -389,8 +390,6 @@ validate_user_ptr(const void *ptr) {
 			} 
 		}
 	} else {
-		DEG_NOTE("badptr", "ptr=%p is_user=%d pml4=%p",
-				 ptr, is_user_addr, cur->pml4);
 		kill_process_due_to_bad_user_memory();
 	}
 }
@@ -398,32 +397,22 @@ validate_user_ptr(const void *ptr) {
 static void
 validate_user_buffer(const void *buffer, size_t size) {
 	const uint8_t *p = buffer;
-	DEG_CALL ("buffer=%p size=%d", buffer, (int) size);
 
 	if (size == 0) {
-		DEG_RETURN ("value=void reason=zero-size");
 		return;
 	}
 	for (size_t i = 0; i < size; i++) {
-		if (i == 0 || i == size - 1 || pg_ofs(p + i) == 0) {
-			DEG_NOTE ("chkbuf", "i=%d addr=%p page=%p ofs=%u",
-					(int) i, p + i, pg_round_down(p + i),
-					(unsigned) pg_ofs(p + i));
-		}
 		validate_user_ptr(p + i);
 	}
-	DEG_RETURN ("value=void buffer=%p size=%d", buffer, (int) size);
 }
 
 static void
 validate_user_string(const char *str) {
 	const char *p = str;
-	DEG_CALL ("str=%p", str);
 
 	while (true) {
 		validate_user_ptr(p);
 		if (*p == '\0') {
-			DEG_RETURN ("value=void len=%d", (int) (p - str));
 			return;
 		}
 		p++;
@@ -432,7 +421,6 @@ validate_user_string(const char *str) {
 
 static void
 kill_process_due_to_bad_user_memory(void) {
-	DEG_NOTE ("kill", "exit_status=-1");
 	thread_current()->exit_status = -1;
 	thread_exit();
 }
