@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include "debug_trace.h"
+#include <stddef.h>
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
