@@ -42,14 +42,15 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 unsigned page_hash (const struct hash_elem *e, void *aux);// 페이지 엘엠을 받아서 페이지 밖으로 이동 후 va 찾아서 헤시 키로 변환.
-bool page_less (const struct hash_elem *a,const struct hash_elem *b, void *aux); //버킷 안의 주소 비교 -> 같은 키인지 반환 
+bool page_less (const struct hash_elem *a,const struct hash_elem *b, void *aux); //버킷 안의 주소 비교 -> 같은 키인지 반환
+void destroy_page(struct hash_elem *e, void *aux); //spt_page_table_kill 헬퍼함수
 
-/* Create the pending page object with initializer. If you want to create a
- * page, do not create it directly and make it through this function or
- * `vm_alloc_page`. */
-bool
-vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
-		vm_initializer *init, void *aux) {
+	/* Create the pending page object with initializer. If you want to create a
+	 * page, do not create it directly and make it through this function or
+	 * `vm_alloc_page`. */
+	bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writable,
+										vm_initializer *init, void *aux)
+{
 
 	ASSERT (VM_TYPE(type) != VM_UNINIT) //그러면 얘는 나중에 될 타입 판정하는거네... uninit -> ?가 될건지
 
@@ -375,9 +376,13 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	
+	//mmap이 아직 안돼서 최소구현으로 단순하게 SPT순회하면서 페이지별 destroy, spt table emtpy
+
+	hash_destroy(&spt->pages, destroy_page);
 }
 
 unsigned
@@ -393,4 +398,10 @@ page_less (const struct hash_elem *a_,
 	const struct page *b = hash_entry (b_, struct page, elem);
 	
 	return a->va < b->va;
+}
+
+void destroy_page(struct hash_elem * e, void * aux UNUSED) {
+	//해시 원소 하나를 받아 해당 원소가 포함된 struct page를 찾고, 페이지 정리 후 free
+	struct page * page = hash_entry(e, struct page, elem);
+	vm_dealloc_page(page);
 }
