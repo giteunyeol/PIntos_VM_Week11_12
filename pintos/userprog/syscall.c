@@ -345,8 +345,79 @@ syscall_handler (struct intr_frame *f) {
 		f->R.rax = ret;
 		break;
 	}
-	
+
+	case SYS_MMAP: {
+		void *addr = (void *) f->R.rdi;
+		size_t length = (size_t) f->R.rsi;
+
+		if (addr == NULL || pg_ofs(addr) != 0) {
+			f->R.rax = NULL;
+			break;
+		}
+
+		if (length == 0){
+			f->R.rax = NULL;
+			break;
+		}
+
+		int fd = (int) f->R.r10;
+		if (fd == 0 || fd == 1){
+			f->R.rax = NULL;
+			break;
+		}
+
+		size_t offset = (size_t) f->R.r8;
+		if (offset % PGSIZE != 0 ){
+			f->R.rax = NULL;
+			break;
+		}
+
+		/* 시작주소:addr, 길이:length
+		 addr부터 시작해서 길이(올림한 값)만큼 pgsize단위로 보면서 그 주소가 이미 spt에 있으면 mmap으로 올리는 것 실패 처리해야한다.
+		 )
+		 반복을 할려고 했는데, 각각의 페이지를 시작주소부터 하나씩 확인하는거지
+		 */
+		bool overlap = false;
+
+		int i = 0;
+		for (i=0 ; i < (length + PGSIZE - 1) / PGSIZE ; i++){
+			struct page *page = spt_find_page(&thread_current()->spt,(char *)addr + i * PGSIZE);
+
+			if (page != NULL){
+				overlap = true;
+				break;
+			}
+		}
+
+		if (overlap) {
+			f->R.rax = NULL;
+			break;
+		}
+
+		struct fd_entry *entry = find_fd_entry(fd);
+
+		if (entry == NULL || entry->file == NULL) {
+			f->R.rax = NULL;
+			break;
+		}
+
+		//f->R.rax = (uint64_t) do_mmap(addr, length, writable, file, offset); 일단 구현
+		break;
+
+	}
+
+	case SYS_MUNMAP:{
+		void *addr = (void *) f->R.rdi;
+
+		if (addr == NULL) {
+			break;
+
+		}
+		//do_munmap(addr); 일단 구현
+		break;
+	}
 	default:
+
 		break;
 	}
 }

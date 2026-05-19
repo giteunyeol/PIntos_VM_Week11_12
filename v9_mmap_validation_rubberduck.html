@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>V9 mmap Syscall Entry / Validation 러버덕 정리</title>
+  <style type="text/css">
+    :root {
+      --bg: #f7f7f4;
+      --paper: #ffffff;
+      --ink: #202124;
+      --muted: #626a73;
+      --line: #d9ddd8;
+      --accent: #28675f;
+      --accent-dark: #183a36;
+      --soft: #e9f4f1;
+      --soft-2: #f5efe5;
+      --pass: #eaf5e9;
+      --warn: #fff5df;
+      --code-bg: #111827;
+      --code-ink: #e5edf5;
+      --shadow: 0 10px 28px rgba(24, 36, 34, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.62;
+    }
+
+    .hero {
+      background: var(--accent-dark);
+      color: #ffffff;
+      padding: 46px 24px 40px;
+    }
+
+    .wrap,
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .page {
+      padding: 28px 24px 56px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 36px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: #eef1f3;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    .subtitle {
+      max-width: 930px;
+      margin: 0;
+      color: #dce8e4;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card,
+    .panel,
+    .note {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .card,
+    .panel {
+      background: var(--paper);
+    }
+
+    .card {
+      padding: 16px;
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+
+    .panel,
+    .note {
+      margin-top: 28px;
+      padding: 22px;
+    }
+
+    .note {
+      background: var(--soft-2);
+      border-color: #dbc49a;
+    }
+
+    .pass {
+      background: var(--pass);
+      border-color: #b6d7ad;
+    }
+
+    .warn {
+      background: var(--warn);
+      border-color: #e1c27f;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: var(--soft);
+      color: #173f39;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td:first-child {
+      width: 12%;
+      font-weight: 700;
+    }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .duck {
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      margin: 10px 0;
+      background: #f9fbfa;
+      border-radius: 6px;
+    }
+
+    .duck strong {
+      color: var(--accent);
+    }
+
+    .code-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    textarea.codebox {
+      display: block;
+      width: 100%;
+      min-height: 280px;
+      resize: vertical;
+      padding: 16px;
+      border: 0;
+      border-radius: 8px;
+      outline: 1px solid #243244;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre;
+      tab-size: 4;
+    }
+
+    .short {
+      min-height: 170px;
+    }
+
+    .chain {
+      margin: 8px 0;
+      color: #294a4a;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      word-break: break-word;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 7px 0;
+    }
+
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      h1 {
+        font-size: 30px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="wrap">
+      <h1>V9 mmap Syscall Entry / Validation 러버덕 정리</h1>
+      <p class="subtitle">
+        V9의 핵심은 mmap의 실제 lazy loading을 완성하기 전에, syscall 입구에서
+        "이 요청은 받아도 되는 요청인가?"를 걸러내는 것입니다. 이 문서는 오리에게 말로 설명하듯
+        각 검증 조건이 왜 필요한지, 어디서 확인하는지, 어떤 테스트와 연결되는지 정리합니다.
+      </p>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="grid">
+      <div class="card">
+        <strong>내가 맡은 범위</strong>
+        <p><code>SYS_MMAP</code>, <code>SYS_MUNMAP</code> entry 연결과 mmap 인자 검증입니다.</p>
+      </div>
+      <div class="card">
+        <strong>성공 목표</strong>
+        <p>잘못된 mmap 요청은 <code>MAP_FAILED</code>, 즉 <code>NULL</code>을 반환하게 만듭니다.</p>
+      </div>
+      <div class="card">
+        <strong>핵심 파일</strong>
+        <p><code>syscall.c</code>, <code>file.c</code>, <code>file.h</code>, <code>vm.h</code>를 봅니다.</p>
+      </div>
+      <div class="card">
+        <strong>대표 테스트</strong>
+        <p><code>mmap-null</code>, <code>mmap-zero-len</code>, <code>mmap-misalign</code>, <code>mmap-bad-fd*</code>, <code>mmap-bad-off</code>.</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <h2>한 문장 요약</h2>
+      <p>
+        <code>mmap(addr, length, writable, fd, offset)</code>는 "파일 fd의 내용을 사용자 가상주소 addr부터 length만큼 매핑해줘"라는 요청이고,
+        V9는 이 요청이 말이 되는 요청인지 먼저 검사하는 단계입니다.
+      </p>
+      <p class="chain">사용자 프로그램 -> mmap() -> syscall5(SYS_MMAP, addr, length, writable, fd, offset) -> syscall_handler() -> do_mmap()</p>
+    </div>
+
+    <div class="panel">
+      <h2>1. syscall 인자 위치</h2>
+      <p>
+        Pintos x86-64 syscall wrapper는 인자를 레지스터에 넣습니다. 이 저장소의
+        <code>intr_frame</code>에서도 <code>r10</code>이 네 번째 인자라고 주석이 달려 있습니다.
+      </p>
+      <table summary="mmap syscall argument registers">
+        <thead>
+          <tr>
+            <th>mmap 인자</th>
+            <th>레지스터</th>
+            <th>syscall_handler에서 읽는 곳</th>
+            <th>뜻</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>addr</code></td>
+            <td><code>rdi</code></td>
+            <td><code>f-&gt;R.rdi</code></td>
+            <td>매핑을 시작할 사용자 가상주소</td>
+          </tr>
+          <tr>
+            <td><code>length</code></td>
+            <td><code>rsi</code></td>
+            <td><code>f-&gt;R.rsi</code></td>
+            <td>매핑할 바이트 수</td>
+          </tr>
+          <tr>
+            <td><code>writable</code></td>
+            <td><code>rdx</code></td>
+            <td><code>f-&gt;R.rdx</code></td>
+            <td>쓰기 가능한 mapping인지</td>
+          </tr>
+          <tr>
+            <td><code>fd</code></td>
+            <td><code>r10</code></td>
+            <td><code>f-&gt;R.r10</code></td>
+            <td>매핑할 열린 파일 descriptor</td>
+          </tr>
+          <tr>
+            <td><code>offset</code></td>
+            <td><code>r8</code></td>
+            <td><code>f-&gt;R.r8</code></td>
+            <td>파일 안에서 시작할 offset</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>2. V9 세부 작업 러버덕</h2>
+      <table summary="V9 mmap validation task map">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>세부 작업</th>
+            <th>오리에게 설명</th>
+            <th>실패 시 반환</th>
+            <th>연결 테스트</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>V9-A</td>
+            <td>mmap / munmap syscall 번호 연결</td>
+            <td>"오리야, 사용자 프로그램이 <code>SYS_MMAP</code> 번호로 들어오면 switch문에서 그 case를 찾아야 해. 없으면 아무 일도 안 하고 지나가."</td>
+            <td><code>mmap</code> 실패 시 <code>NULL</code></td>
+            <td>모든 mmap 테스트의 출발점</td>
+          </tr>
+          <tr>
+            <td>V9-B</td>
+            <td>fd lookup/file object 접근 경로 확인</td>
+            <td>"fd 숫자만으로는 파일을 읽을 수 없어. 현재 thread의 <code>fd_list</code>에서 <code>struct fd_entry</code>를 찾아서 진짜 <code>struct file *</code>을 꺼내야 해."</td>
+            <td><code>NULL</code></td>
+            <td><code>mmap-bad-fd</code></td>
+          </tr>
+          <tr>
+            <td>V9-C</td>
+            <td><code>addr == NULL</code> 및 page-aligned 검사</td>
+            <td>"매핑 시작 주소가 0이면 안 돼. 그리고 page 단위 매핑이니까 주소가 4096 단위로 딱 맞아야 해."</td>
+            <td><code>NULL</code></td>
+            <td><code>mmap-null</code>, <code>mmap-misalign</code></td>
+          </tr>
+          <tr>
+            <td>V9-D</td>
+            <td><code>length == 0</code> 검사</td>
+            <td>"0바이트를 매핑한다는 건 아무 page도 만들지 않는다는 뜻이라 의미가 없어. Pintos 테스트는 이걸 실패로 기대해."</td>
+            <td><code>NULL</code></td>
+            <td><code>mmap-zero-len</code></td>
+          </tr>
+          <tr>
+            <td>V9-E</td>
+            <td>fd 0/1 및 bad fd reject</td>
+            <td>"0은 stdin, 1은 stdout이야. 얘들은 일반 파일이 아니니까 mmap 대상이 아니야. fd_list에 없는 숫자도 당연히 거절."</td>
+            <td><code>NULL</code></td>
+            <td><code>mmap-bad-fd</code>, <code>mmap-bad-fd2</code>, <code>mmap-bad-fd3</code></td>
+          </tr>
+          <tr>
+            <td>V9-F</td>
+            <td>offset page-aligned 검사</td>
+            <td>"파일의 중간부터 매핑할 수는 있지만, offset도 page 단위여야 해. <code>0x1234</code> 같은 값은 page 경계가 아니야."</td>
+            <td><code>NULL</code></td>
+            <td><code>mmap-bad-off</code></td>
+          </tr>
+          <tr>
+            <td>V9-G</td>
+            <td>mapping range overlap 검사</td>
+            <td>"addr 한 페이지뿐 아니라 length가 덮는 전체 page 범위를 봐야 해. 그중 하나라도 이미 SPT에 있으면 겹치는 매핑이야."</td>
+            <td><code>NULL</code></td>
+            <td><code>mmap-overlap</code>, 이후 overlap 계열</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>3. 검증 순서</h2>
+      <div class="flow">
+        <div class="step">
+          <span class="num">1</span>
+          <div>
+            <h3>syscall switch에 case 추가</h3>
+            <p><code>SYS_MMAP</code>에서는 인자 5개를 꺼내고, <code>SYS_MUNMAP</code>에서는 주소 1개를 꺼냅니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <span class="num">2</span>
+          <div>
+            <h3>가벼운 값 검증 먼저</h3>
+            <p><code>addr == NULL</code>, <code>pg_ofs(addr) != 0</code>, <code>length == 0</code>, <code>offset % PGSIZE != 0</code> 같은 조건을 먼저 봅니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <span class="num">3</span>
+          <div>
+            <h3>fd로 파일 찾기</h3>
+            <p><code>fd &lt; 2</code>는 바로 실패. 그 외에는 <code>find_fd_entry(fd)</code>로 <code>struct file *</code>을 찾습니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <span class="num">4</span>
+          <div>
+            <h3>주소 범위 전체 검사</h3>
+            <p><code>[addr, addr + length)</code>가 사용자 주소이고, 각 page가 SPT에 이미 없는지 확인합니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <span class="num">5</span>
+          <div>
+            <h3>진짜 mmap 구현으로 넘기기</h3>
+            <p>모든 검증을 통과하면 <code>do_mmap(addr, length, writable, file, offset)</code>로 넘깁니다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>4. 오리와 대화하기</h2>
+      <div class="duck">
+        <p><strong>나:</strong> mmap 요청이 들어왔어. 제일 먼저 뭘 볼까?</p>
+        <p><strong>오리:</strong> syscall 번호가 <code>SYS_MMAP</code>인지 switch에서 잡히는지 봐. case가 없으면 아무 검증도 못 해.</p>
+      </div>
+      <div class="duck">
+        <p><strong>나:</strong> 주소가 <code>NULL</code>이면 왜 안 돼?</p>
+        <p><strong>오리:</strong> Pintos는 0번 page 매핑을 금지해. null pointer 접근을 잡아야 하는데 거기에 파일을 매핑하면 위험해져.</p>
+      </div>
+      <div class="duck">
+        <p><strong>나:</strong> 주소 정렬은 왜 중요해?</p>
+        <p><strong>오리:</strong> VM은 page 단위로 움직여. 시작 주소가 page 경계가 아니면 SPT key, PML4 mapping, file offset 계산이 다 애매해져.</p>
+      </div>
+      <div class="duck">
+        <p><strong>나:</strong> fd 0, 1은 왜 reject야?</p>
+        <p><strong>오리:</strong> stdin/stdout은 일반 파일 객체처럼 page에 매핑할 수 있는 대상이 아니야. mmap은 파일 내용을 메모리처럼 보이게 하는 기능이야.</p>
+      </div>
+      <div class="duck">
+        <p><strong>나:</strong> overlap은 뭘 기준으로 봐?</p>
+        <p><strong>오리:</strong> 시작 주소 하나만 보지 말고, length가 덮는 모든 page를 봐. 하나라도 SPT에 이미 있으면 실패야.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>5. 구현 모양 의사코드</h2>
+      <p>
+        이 코드는 붙여넣기용 완성 코드가 아니라, V9 검증 순서를 머릿속에 넣기 위한 형태입니다.
+        실제 구현할 때는 현재 저장소의 <code>find_fd_entry()</code>, <code>filesys_lock</code>, <code>do_mmap()</code> 위치에 맞춰 조정하면 됩니다.
+      </p>
+
+      <div class="code-title">
+        <h3>syscall_handler 쪽</h3>
+        <span class="badge">userprog/syscall.c</span>
+      </div>
+      <textarea class="codebox" readonly>case SYS_MMAP: {
+	void *addr = (void *) f->R.rdi;
+	size_t length = (size_t) f->R.rsi;
+	int writable = (int) f->R.rdx;
+	int fd = (int) f->R.r10;
+	off_t offset = (off_t) f->R.r8;
+	struct fd_entry *entry;
+
+	if (addr == NULL || pg_ofs (addr) != 0) {
+		f->R.rax = (uint64_t) MAP_FAILED;
+		break;
+	}
+	if (length == 0) {
+		f->R.rax = (uint64_t) MAP_FAILED;
+		break;
+	}
+	if (fd < 2) {
+		f->R.rax = (uint64_t) MAP_FAILED;
+		break;
+	}
+	if (offset % PGSIZE != 0) {
+		f->R.rax = (uint64_t) MAP_FAILED;
+		break;
+	}
+
+	entry = find_fd_entry (fd);
+	if (entry == NULL || entry->file == NULL) {
+		f->R.rax = (uint64_t) MAP_FAILED;
+		break;
+	}
+
+	if (!is_valid_mmap_range (addr, length)) {
+		f->R.rax = (uint64_t) MAP_FAILED;
+		break;
+	}
+
+	f->R.rax = (uint64_t) do_mmap (addr, length, writable,
+			entry->file, offset);
+	break;
+}
+
+case SYS_MUNMAP: {
+	do_munmap ((void *) f->R.rdi);
+	break;
+}</textarea>
+
+      <div class="code-title">
+        <h3>range overlap helper</h3>
+        <span class="badge">userprog/syscall.c 또는 vm/file.c</span>
+      </div>
+      <textarea class="codebox short" readonly>static bool
+is_valid_mmap_range (void *addr, size_t length) {
+	uint8_t *start = addr;
+	uint8_t *end = start + length;
+
+	if (!is_user_vaddr (start) || !is_user_vaddr (end - 1))
+		return false;
+	if (end <= start)
+		return false;
+
+	for (uint8_t *page = start; page < end; page += PGSIZE) {
+		if (spt_find_page (&amp;thread_current ()->spt, page) != NULL)
+			return false;
+	}
+	return true;
+}</textarea>
+    </div>
+
+    <div class="panel">
+      <h2>6. 테스트별로 어떤 조건을 때리는가</h2>
+      <table summary="mmap validation tests">
+        <thead>
+          <tr>
+            <th>테스트</th>
+            <th>요청 모양</th>
+            <th>내 코드가 잡아야 하는 조건</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>mmap-null</code></td>
+            <td><code>mmap(NULL, 4096, ..., fd, 0)</code></td>
+            <td><code>addr == NULL</code>이면 <code>MAP_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>mmap-zero-len</code></td>
+            <td><code>mmap(addr, 0, ..., fd, 0)</code></td>
+            <td><code>length == 0</code>이면 <code>MAP_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>mmap-misalign</code></td>
+            <td><code>mmap(0x10001234, 4096, ..., fd, 0)</code></td>
+            <td><code>pg_ofs(addr) != 0</code>이면 <code>MAP_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>mmap-bad-fd</code></td>
+            <td>존재하지 않는 fd</td>
+            <td><code>find_fd_entry(fd) == NULL</code>이면 <code>MAP_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>mmap-bad-fd2</code></td>
+            <td><code>fd == 0</code></td>
+            <td>stdin은 mmap 대상이 아니므로 <code>MAP_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>mmap-bad-fd3</code></td>
+            <td><code>fd == 1</code></td>
+            <td>stdout은 mmap 대상이 아니므로 <code>MAP_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>mmap-bad-off</code></td>
+            <td><code>offset == 0x1234</code></td>
+            <td><code>offset % PGSIZE != 0</code>이면 <code>MAP_FAILED</code></td>
+          </tr>
+          <tr>
+            <td><code>mmap-overlap</code></td>
+            <td>이미 매핑된 주소에 다시 mmap</td>
+            <td>range 안의 page가 SPT에 이미 있으면 <code>MAP_FAILED</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note pass">
+      <h2>내가 구현할 때 체크리스트</h2>
+      <ul>
+        <li><code>SYS_MMAP</code>, <code>SYS_MUNMAP</code> case가 switch문에 있는가?</li>
+        <li><code>fd</code>를 <code>f-&gt;R.r10</code>에서 읽고 있는가?</li>
+        <li><code>offset</code>을 <code>f-&gt;R.r8</code>에서 읽고 있는가?</li>
+        <li>실패 조건에서 <code>f-&gt;R.rax = (uint64_t) MAP_FAILED</code> 또는 <code>NULL</code>을 넣는가?</li>
+        <li><code>addr</code>, <code>length</code>, <code>fd</code>, <code>offset</code> 검사를 <code>do_mmap()</code> 호출 전에 하는가?</li>
+        <li>overlap 검사는 시작 page 하나가 아니라 전체 range를 보는가?</li>
+        <li>검증 실패 시 file을 건드리거나 SPT에 page를 넣지 않는가?</li>
+      </ul>
+    </div>
+
+    <div class="note warn">
+      <h2>나중 단계와 헷갈리지 말 것</h2>
+      <ul>
+        <li>V9는 validation입니다. 실제 <code>VM_FILE</code> page를 만들고 lazy loading하는 코드는 다음 단계의 본체입니다.</li>
+        <li><code>do_mmap()</code> 안에서도 검증을 한 번 더 해도 됩니다. syscall 입구와 구현 함수 사이의 방어선이라고 생각하면 됩니다.</li>
+        <li>bad fd 테스트 설명에는 "fail silently or terminate"라고 되어 있지만, 여기서는 조용히 <code>MAP_FAILED</code>를 반환하는 방향이 가장 덜 위험합니다.</li>
+        <li>file length가 0인 경우도 보통 실패 처리합니다. V9 표에는 없지만 이후 mmap 테스트에서 도움이 됩니다.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
