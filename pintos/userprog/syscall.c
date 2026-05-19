@@ -243,16 +243,11 @@ syscall_handler (struct intr_frame *f) {
 		 * 시스템 콜 반환값도 rax로 돌아가므로 read() 결과를 f->R.rax에 저장한다. */
 		//buffer : 읽은 데이터를 써 넣을 목적지 
 		const char *buffer = (const void *)f->R.rsi;
-		DEG_NOTE ("read", "fd=%d buffer=%p size=%u",
-				(int) f->R.rdi, buffer, (unsigned) f->R.rdx);
 		struct page *page = spt_find_page(&thread_current()->spt, (void *) buffer);
 		if (page && !page->writable) {
-			DEG_NOTE ("read", "kill reason=readonly-page page=%p buffer=%p",
-					page, buffer);
 			kill_process_due_to_bad_user_memory();
 		}
 		f->R.rax = read((int) f->R.rdi, (void *) f->R.rsi, (unsigned) f->R.rdx);
-		DEG_NOTE ("read", "return=%d", (int) f->R.rax);
 		break;
 	}
 
