@@ -62,29 +62,27 @@ syscall_init (void) {
 
 /* user가 요청한 fd를 읽어 buffer에 내용을 저장 */
 int read(int fd, void *buffer, unsigned size) {
-	DEG_CALL ("fd=%d buffer=%p size=%u", fd, buffer, size);
-	DEG_NOTE ("range", "start=%p end=%p start_page=%p end_page=%p",
+	DEG_NOTE ("read", "fd=%d start=%p end=%p start_page=%p end_page=%p size=%u",
+			fd,
 			buffer, size > 0 ? (uint8_t *) buffer + size - 1 : buffer,
 			pg_round_down(buffer),
-			size > 0 ? pg_round_down((uint8_t *) buffer + size - 1) : pg_round_down(buffer));
+			size > 0 ? pg_round_down((uint8_t *) buffer + size - 1) : pg_round_down(buffer),
+			size);
 	/* 인자 기본 검사 */
 	if (fd < 0) {
-		DEG_RETURN ("value=-1 reason=bad-fd fd=%d", fd);
 		return -1;
 	}
 
 	if (fd == 1) { 	// fd == 1: 실패
-		DEG_RETURN ("value=-1 reason=stdout-read");
 		return -1;
 	}
 	// size 검사
 		if (size == 0) {
-		DEG_RETURN ("value=0 reason=zero-size");
 		return 0;
 	}
 
 	validate_user_buffer(buffer, size);
-	DEG_NOTE ("valid", "buffer=%p size=%u passed validation", buffer, size);
+	DEG_NOTE ("read", "validated buffer=%p size=%u", buffer, size);
 
 	/* 실제 read를 수행 */
 	size_t i;
@@ -94,26 +92,21 @@ int read(int fd, void *buffer, unsigned size) {
 		for (i=0; i<size; i++) {
 			buf[i] = input_getc();
 		}
-		DEG_RETURN ("value=%u reason=stdin", size);
 		return size;
 	}
 	if (fd >= 2) {
 		struct fd_entry *entry = find_fd_entry(fd); // file이면 fd로 entry를 찾는다
 		if (entry == NULL || entry->file == NULL) {
-			DEG_RETURN ("value=-1 reason=no-entry fd=%d", fd);
 			return -1;
 		}
-		DEG_NOTE ("file", "before file_read fd=%d file=%p buffer=%p size=%u",
-				fd, entry->file, buffer, size);
 		lock_acquire(&filesys_lock); // file이면 filesys lock 획득 후 file_read
 		off_t read_size = file_read(entry->file, buffer, size);
 		lock_release(&filesys_lock); // file이면 filesys lock 해제
 
-		DEG_RETURN ("value=%d reason=file-read fd=%d buffer=%p size=%u",
+		DEG_NOTE ("read", "file_read ret=%d fd=%d buffer=%p size=%u",
 				(int) read_size, fd, buffer, size);
 		return read_size; // 읽은 바이트 수 반환
 	}
-	DEG_RETURN ("value=-1 reason=unhandled-fd fd=%d", fd);
 	return -1;
 }
 
@@ -206,10 +199,8 @@ syscall_handler (struct intr_frame *f) {
 		int fd = (int) f->R.rdi;
 		const char *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
-		DEG_NOTE ("write", "fd=%d buffer=%p size=%d", fd, buffer, (int) size);
 		if (size == 0) {
 			f->R.rax = 0;
-			DEG_NOTE ("write", "return=0 reason=zero-size");
 			break;
 		}
 
@@ -217,22 +208,18 @@ syscall_handler (struct intr_frame *f) {
 			validate_user_buffer(buffer, size);
 			putbuf(buffer, size);
 			f->R.rax = size;
-			DEG_NOTE ("write", "return=%d reason=stdout", (int) f->R.rax);
 		} else if (fd >= 2) {
 			struct fd_entry *entry = find_fd_entry(fd);
 			if (entry == NULL || entry->file == NULL) {
 				f->R.rax = -1;
-				DEG_NOTE ("write", "return=-1 reason=no-entry fd=%d", fd);
 				break;
 			}
 			validate_user_buffer(buffer, size);
 			lock_acquire(&filesys_lock);
 			f->R.rax = file_write(entry->file, buffer, size);
 			lock_release(&filesys_lock);
-			DEG_NOTE ("write", "return=%d reason=file", (int) f->R.rax);
 		} else {
 			f->R.rax = -1;
-			DEG_NOTE ("write", "return=-1 reason=bad-fd fd=%d", fd);
 		}
 		break;
 	}
@@ -244,10 +231,17 @@ syscall_handler (struct intr_frame *f) {
 		//buffer : 읽은 데이터를 써 넣을 목적지 
 		const char *buffer = (const void *)f->R.rsi;
 		struct page *page = spt_find_page(&thread_current()->spt, (void *) buffer);
+		DEG_NOTE ("read", "fd=%d buffer=%p size=%u page=%p writable=%d saved_rsp=%p",
+				(int) f->R.rdi, buffer, (unsigned) f->R.rdx,
+				page, page != NULL ? page->writable : -1,
+				(void *) thread_current()->saved_user_rsp);
 		if (page && !page->writable) {
+			DEG_NOTE ("kill", "reason=read-readonly-page buffer=%p page=%p", buffer, page);
 			kill_process_due_to_bad_user_memory();
 		}
 		f->R.rax = read((int) f->R.rdi, (void *) f->R.rsi, (unsigned) f->R.rdx);
+		DEG_NOTE ("read", "return=%d buffer=%p size=%u",
+				(int) f->R.rax, buffer, (unsigned) f->R.rdx);
 		break;
 	}
 
@@ -379,12 +373,22 @@ validate_user_ptr(const void *ptr) {
 	bool is_user_addr = ptr != NULL && is_user_vaddr(ptr);
 
 	if (is_user_addr) {
-		if(!pml4_get_page(cur->pml4, ptr)) {
-			if (!vm_claim_page((void *) ptr)) {
-				kill_process_due_to_bad_user_memory();
+		void *mapped = pml4_get_page(cur->pml4, ptr);
+		if(!mapped) {
+			struct page *page = spt_find_page(&cur->spt, (void *) ptr);
+			bool claimed = vm_claim_page((void *) ptr);
+
+			if (!claimed) {
+				if (USER_STACK - STACK_LIMIT <= ptr &&ptr < USER_STACK &&ptr >= cur->saved_user_rsp - 8) {
+					vm_alloc_page(VM_ANON, pg_round_down(ptr), true);
+					vm_claim_page(ptr);
+				} else {
+					kill_process_due_to_bad_user_memory();
+				}
 			} 
 		}
 	} else {
+		DEG_NOTE ("kill", "reason=validate-not-user ptr=%p", ptr);
 		kill_process_due_to_bad_user_memory();
 	}
 }
@@ -416,6 +420,8 @@ validate_user_string(const char *str) {
 
 static void
 kill_process_due_to_bad_user_memory(void) {
+	DEG_NOTE ("kill", "exit_status=-1 saved_rsp=%p",
+			(void *) thread_current()->saved_user_rsp);
 	thread_current()->exit_status = -1;
 	thread_exit();
 }
