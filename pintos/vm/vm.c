@@ -191,7 +191,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		user_rsp = cur->saved_user_rsp;
 	}
 	struct page *page = spt_find_page(spt, addr);
-	
+
 	if (page == NULL) {
 		if (USER_STACK - STACK_LIMIT <= address  && address < USER_STACK && address >= user_rsp - 8) {
 			vm_stack_growth(pg_round_down(addr));
@@ -260,9 +260,11 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 }
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
-
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	while(hash_next != NULL) {
+		src->pages
+	}
 }
 
 /* Free the resource hold by the supplemental page table */
