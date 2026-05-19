@@ -47,10 +47,10 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */ //이 page가 올라갈 물리 프레임에 대한 포인터
 	struct hash_elem elem;
 	bool writable;
-
+	
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
-	union {
+	union { //페이지가 바뀔타입
 		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
@@ -74,7 +74,7 @@ struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);
 	void (*destroy) (struct page *);
-	enum vm_type type;
+	enum vm_type type; //페이지 현재타입
 };
 
 #define swap_in(page, v) (page)->operations->swap_in ((page), v)
@@ -103,8 +103,10 @@ void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
 
-#define vm_alloc_page(type, upage, writable) \
-	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)
+// lazy정보를 안받음 : vm_alloc_page
+// lazy정보를 받음 : vm_alloc_page_with_initializer
+#define vm_alloc_page(type, upage, writable) \ 
+	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL) 
 bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
 		bool writable, vm_initializer *init, void *aux);
 void vm_dealloc_page (struct page *page);

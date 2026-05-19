@@ -1088,7 +1088,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			DEG_RETURN ("value=0 reason=vm-alloc-fail upage=%p aux=%p", upage, lazy_aux);
 			return false;
 		}
-
+struct aux
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
