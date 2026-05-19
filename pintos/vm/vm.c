@@ -23,12 +23,13 @@ vm_init (void) {
 /* Get the type of the page. This function is useful if you want to know the
  * type of the page after it will be initialized.
  * This function is fully implemented now. */
+//초기화 이후걸 가져오면 uninit일때는 체크를 못해줌
 enum vm_type
 page_get_type (struct page *page) {
-	int ty = VM_TYPE (page->operations->type);
+	int ty = VM_TYPE (page->operations->type); //페이지 현재 타입
 	switch (ty) {
-		case VM_UNINIT:
-			return VM_TYPE (page->uninit.type);
+		case VM_UNINIT: 
+			return VM_TYPE (page->uninit.type); //페이지가 될 타입
 		default:
 			return ty;
 	}
@@ -262,9 +263,48 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src) {
-	while(hash_next != NULL) {
-		src->pages
+
+	//struct hash copy_page; //페이지 카피할 해시형 변수 생성
+	//hash_init(&copy_page, page_hash, page_less, NULL); //copy_page 초기화
+
+	//해시 순회
+	struct hash_iterator i; 
+	hash_first(&i, &src->pages); //해시 처음 가져오기
+	while(hash_next(&i)) { //해시 다 돌때까지 순회
+		struct page * pg = hash_entry(hash_cur(&i), struct page, elem); //페이지 순회하면서 삽입
+		enum vm_type cur_type = pg->operations->type; //cur_type : 현재 페이지 타입
+
+		//부모 페이지 타입에 따라 분류
+		if(cur_type == VM_UNINIT) { //현재 타입이 uninit인 케이스
+			// 나중에 될 인자로 페이지 하나 생성해서 넣어줌, page_get_type은 uninit이 나중에 될 페이지를 리턴함
+			if(!vm_alloc_page(page_get_type(pg), pg->va, pg->writable)) { //NULL이 나오는 경우
+				return false;
+			}
+		} 
+		else { //부모 타입이 anon, file_backed인 경우
+			//아니 시벌 새로운 페이지 생성을 어케 함? 이미 바뀌어버린거잖아
+			page
+		}
+		
+		/*
+		if(!vm_alloc_page(pg->operations->type, pg->va, pg->writable)) { //새로운 페이지를 할당해줌.
+			return false;
+			//이녀석 함수 첫번째 인자는 이제 uninit이 나중에 어떤 페이지로 바뀔지 저장해주는인자임
+			//처음에 이런식으로 해줄랬는데, vm_alloc_page()는 램에 올려주는 함수기때문에.
+			//열어보면 UNINIT타입을 못받게 ASSERT가 내부에 걸려있음.
+			그래서 page_get_type()을 사용.
+		}
+		*/
+		struct page * new_page = spt_find_page(dst, pg->va); //vm alloc page로 할당해준 새로운 페이지 
+		//각각의 케이스에 따라서 할당, uninit, anon, file_backed
+		//anon, file_backed인 경우는 페이지 테이블에 올려줘야함
+		if(&new_page->operations->type != VM_UNINIT) { //페이지가 anon, file_backed인경우
+			vm_claim_page(new_page->va); //claim
+			new_page->frame = pg->frame;
+		}
+		
 	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
