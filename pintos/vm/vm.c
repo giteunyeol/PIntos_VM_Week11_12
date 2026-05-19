@@ -49,7 +49,7 @@ bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
 
-	ASSERT (VM_TYPE(type) != VM_UNINIT)
+	ASSERT (VM_TYPE(type) != VM_UNINIT) //그러면 얘는 나중에 될 타입 판정하는거네... uninit -> ?가 될건지
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	
@@ -274,18 +274,29 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct page * pg = hash_entry(hash_cur(&i), struct page, elem); //페이지 순회하면서 삽입
 		enum vm_type cur_type = pg->operations->type; //cur_type : 현재 페이지 타입
 
-		//부모 페이지 타입에 따라 분류
-		if(cur_type == VM_UNINIT) { //현재 타입이 uninit인 케이스
+			// 부모 페이지 타입에 따라 분류
+		if (cur_type == VM_UNINIT)
+		{ // 현재 타입이 uninit인 케이스
 			// 나중에 될 인자로 페이지 하나 생성해서 넣어줌, page_get_type은 uninit이 나중에 될 페이지를 리턴함
-			if(!vm_alloc_page(page_get_type(pg), pg->va, pg->writable)) { //NULL이 나오는 경우
+			if(!vm_alloc_page_with_initializer(page_get_type(pg), pg->va, pg->writable, pg->uninit.init, NULL)) { //NULL이 나오는 경우
 				return false;
 			}
-		} 
+		}
 		else { //부모 타입이 anon, file_backed인 경우
 			//아니 시벌 새로운 페이지 생성을 어케 함? 이미 바뀌어버린거잖아
-			page
+			//둘다 그냥 vm_alloc_page로 생성한 후 ANON/FILE_BACKED로 바꾸게 페이지 폴트를 일부러 한번 일으켜야하나?
+			//근데 그건 말이 안되는데?? 원래 그냥 spt에 올리고 lazy 하는거잖음 
+			//아 claim을 바로 하면 될것같은데??
+			if (!vm_alloc_page(page_get_type(pg), pg->va, pg->writable)) { // NULL이 나오는 경우
+				return false;
+			}
+			struct page *new_page = spt_find_page(dst, pg->va);
+			// anon, file_backed니까 실제로 frame에도 올려줌
+			vm_claim_page(new_page->va); 
+			 = *(pg->frame); //부모 프레임값을 자식페이지에 복사
 		}
-		
+	}
+	//++)아니 아 vm_alloc_page에서 현재 스레드 spt에 삽입해주고있는데, 이걸 뭐 어케함? 다른 유틸함수가 없잖아;;;
 		/*
 		if(!vm_alloc_page(pg->operations->type, pg->va, pg->writable)) { //새로운 페이지를 할당해줌.
 			return false;
@@ -295,15 +306,14 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			그래서 page_get_type()을 사용.
 		}
 		*/
-		struct page * new_page = spt_find_page(dst, pg->va); //vm alloc page로 할당해준 새로운 페이지 
+	/*
 		//각각의 케이스에 따라서 할당, uninit, anon, file_backed
 		//anon, file_backed인 경우는 페이지 테이블에 올려줘야함
 		if(&new_page->operations->type != VM_UNINIT) { //페이지가 anon, file_backed인경우
 			vm_claim_page(new_page->va); //claim
 			new_page->frame = pg->frame;
 		}
-		
-	}
+		*/
 	return true;
 }
 
