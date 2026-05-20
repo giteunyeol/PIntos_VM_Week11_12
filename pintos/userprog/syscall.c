@@ -355,7 +355,10 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
             return false;
 		}
         if (pml4_get_page(t->pml4, uaddr) == NULL) {
-            return false;
+			if (spt_find_page (&t->spt, (void *) uaddr) == NULL ||
+					!vm_claim_page ((void *) uaddr)) {
+				return false;
+			}
 		}
 
         buf[i] = *uaddr;

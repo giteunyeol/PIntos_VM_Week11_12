@@ -7,6 +7,7 @@
 #include "threads/mmu.h"
 #include "debug_trace.h"
 #include <stddef.h>
+#include <string.h>
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -39,8 +40,17 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
-unsigned page_hash (const struct hash_elem *e, void *aux);// 페이지 엘엠을 받아서 페이지 밖으로 이동 후 va 찾아서 헤시 키로 변환.
+void destroy_page (struct hash_elem *e, void *aux);
+uint64_t page_hash (const struct hash_elem *e, void *aux);// 페이지 엘엠을 받아서 페이지 밖으로 이동 후 va 찾아서 헤시 키로 변환.
 bool page_less (const struct hash_elem *a,const struct hash_elem *b, void *aux); //버킷 안의 주소 비교 -> 같은 키인지 반환 
+
+struct aux {
+	struct file *file;
+	void *va;
+	off_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -261,19 +271,101 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 }
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	struct hash_iterator i;
 
+	hash_first (&i, &src->pages);
+	while (hash_next (&i)) {
+		struct page *src_page = hash_entry (hash_cur (&i), struct page, elem);
+		enum vm_type type = page_get_type (src_page);
+		struct page *dst_page = NULL;
+
+		if (src_page->operations->type == VM_UNINIT) {
+			struct aux *new_aux = NULL;
+
+			dst_page = malloc (sizeof *dst_page);
+			if (dst_page == NULL) {
+				goto err;
+			}
+
+			if (src_page->uninit.aux != NULL) {
+				new_aux = malloc (sizeof *new_aux);
+				if (new_aux == NULL) {
+					free (dst_page);
+					goto err;
+				}
+				*new_aux = *(struct aux *) src_page->uninit.aux;
+			}
+
+			uninit_new (dst_page, src_page->va, src_page->uninit.init,
+					src_page->uninit.type, new_aux,
+					src_page->uninit.page_initializer);
+			dst_page->writable = src_page->writable;
+
+			if (!spt_insert_page (dst, dst_page)) {
+				free (new_aux);
+				free (dst_page);
+				goto err;
+			}
+			continue;
+		}
+
+		if (type == VM_ANON) {
+			dst_page = malloc (sizeof *dst_page);
+			if (dst_page == NULL) {
+				goto err;
+			}
+
+			dst_page->va = src_page->va;
+			dst_page->frame = NULL;
+			dst_page->writable = src_page->writable;
+
+			if (!anon_initializer (dst_page, VM_ANON, NULL)) {
+				free (dst_page);
+				goto err;
+			}
+
+			if (!spt_insert_page (dst, dst_page)) {
+				free (dst_page);
+				goto err;
+			}
+
+			if (!vm_do_claim_page (dst_page)) {
+				goto err;
+			}
+
+			if (src_page->frame == NULL || src_page->frame->kva == NULL) {
+				goto err;
+			}
+			memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+			continue;
+		}
+
+		goto err;
+	}
+	return true;
+
+err:
+	supplemental_page_table_kill (dst);
+	return false;
 }
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	if (spt->pages.buckets == NULL) {
+		return;
+	}
+	hash_destroy (&spt->pages, destroy_page);
+	spt->pages.buckets = NULL;
+	spt->pages.bucket_cnt = 0;
+	spt->pages.elem_cnt = 0;
 }
 
-unsigned
+uint64_t
 page_hash (const struct hash_elem *e, void *aux )  {
 	struct page *something = hash_entry(e, struct page, elem);
 	return hash_bytes ( &something -> va, sizeof something -> va) ;
@@ -286,4 +378,14 @@ page_less (const struct hash_elem *a_,
 	const struct page *b = hash_entry (b_, struct page, elem);
 	
 	return a->va < b->va;
+}
+
+void
+destroy_page (struct hash_elem *e, void *aux UNUSED) {
+	struct page *page = hash_entry (e, struct page, elem);
+	if (page->frame != NULL) {
+		free (page->frame);
+		page->frame = NULL;
+	}
+	vm_dealloc_page (page);
 }

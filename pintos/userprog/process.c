@@ -365,6 +365,11 @@ process_exec (void *f_name) {
 	struct thread *current = thread_current();
 	uint64_t *old_pml4 = current->pml4;
 	struct file *old_exec_file = current->exec_file;
+#ifdef VM
+	struct supplemental_page_table old_spt = current->spt;
+
+	supplemental_page_table_init (&current->spt);
+#endif
 
 
 	/* thread 구조체 안의 intr_frame은 사용할 수 없다.
@@ -392,11 +397,15 @@ process_exec (void *f_name) {
 	/* 적재에 실패하면 종료한다. */
 	if (!success) {
 		uint64_t *new_pml4 = current->pml4;
+#ifdef VM
+		supplemental_page_table_kill (&current->spt);
+		current->spt = old_spt;
+#endif
 		current->pml4 = old_pml4;
 
 		process_activate(current);
 
-		if (new_pml4 != NULL) {
+		if (new_pml4 != NULL && new_pml4 != old_pml4) {
 			pml4_destroy(new_pml4);
 		}
 
@@ -407,6 +416,10 @@ process_exec (void *f_name) {
     	file_allow_write(old_exec_file);
     	file_close(old_exec_file);
 	}
+
+#ifdef VM
+	supplemental_page_table_kill (&old_spt);
+#endif
 
 	if (old_pml4 != NULL) {
 		pml4_destroy(old_pml4);
@@ -652,6 +665,8 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	char **argv = NULL;
+	char **arg_addr = NULL;
 	DEG_CALL ("file_name=\"%s\" if_=%p thread=%p",
 			file_name != NULL ? file_name : "(null)", if_, t);
 	/* file_name 파싱을 위한 copy 만들기 */
@@ -661,8 +676,15 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 	strlcpy(file_name_copy, file_name, PGSIZE);
+
+	argv = malloc (sizeof *argv * 64);
+	arg_addr = malloc (sizeof *arg_addr * 64);
+	if (argv == NULL || arg_addr == NULL) {
+		DEG_NOTE ("goto", "reason=argv-malloc-fail");
+		goto done;
+	}
+
 	/* NULL까지 반복하여 argv 만들기 */
-	char *argv[64];
 	char *save_ptr;
 	char *token = strtok_r(file_name_copy, " ", &save_ptr);
 	if (token == NULL) {
@@ -789,7 +811,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Implement argument passing (see project2/argument_passing.html). */
 	/* 스택에 토큰 올리기 */
 	// 스택 맨 위에 명령줄 문자열 삽입한다
-	char *arg_addr[64];
 	int j = 0;
 
 	while (argv[j] != NULL) {
@@ -856,6 +877,8 @@ done:
 	if (file_name_copy != NULL) {
 		palloc_free_page(file_name_copy);
 	}
+	free (argv);
+	free (arg_addr);
 	return success;
 }
 
