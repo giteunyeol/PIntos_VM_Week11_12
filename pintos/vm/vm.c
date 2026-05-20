@@ -8,6 +8,7 @@
 #include "threads/mmu.h"
 #include "debug_trace.h"
 #include "userprog/process.h"
+#include <stddef.h>
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */

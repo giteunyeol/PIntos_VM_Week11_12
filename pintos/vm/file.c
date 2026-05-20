@@ -1,10 +1,13 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
 #include "vm/vm.h"
+#include "threads/malloc.h"
+#include "lib/string.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
+static bool lazy_load_file(struct page *page, void *lazy_load_aux);
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
@@ -12,6 +15,14 @@ static const struct page_operations file_ops = {
 	.swap_out = file_backed_swap_out,
 	.destroy = file_backed_destroy,
 	.type = VM_FILE,
+};
+
+struct lazy_load_aux
+{
+	struct file *file;
+	off_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
 };
 
 /* The initializer of file vm */
@@ -26,12 +37,20 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &file_ops;
 
 	struct file_page *file_page = &page->file;
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+	if (file_read_at(file_page->file, kva, file_page->read_bytes, file_page->offset) != file_page->read_bytes)
+	{
+		return false;
+	}
+	uintptr_t kva_start_addr = (uintptr_t)kva;
+	memset((void *)(kva_start_addr + file_page->read_bytes), 0, file_page->zero_bytes);
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
@@ -55,4 +74,16 @@ do_mmap (void *addr, size_t length, int writable,
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+}
+
+static bool lazy_load_file(struct page *page, void *lazy_load_aux)
+{
+	struct lazy_load_aux *aux = lazy_load_aux;
+	struct file_page *file_page = &page->file;
+	file_page->file = aux->file;
+	file_page->offset = aux->offset;
+	file_page->read_bytes = aux->read_bytes;
+	file_page->zero_bytes = aux->zero_bytes;
+	free(lazy_load_aux);
+	return true;
 }
