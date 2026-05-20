@@ -1,12 +1,13 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
+#include <string.h>
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include "debug_trace.h"
-#include "userprog/process.c"
+#include "userprog/process.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -53,8 +54,8 @@ void destroy_page(struct hash_elem *e, void *aux); //spt_page_table_kill 헬퍼�
 {
 
 	ASSERT (VM_TYPE(type) != VM_UNINIT) //그러면 얘는 나중에 될 타입 판정하는거네... uninit -> ?가 될건지
-
-	struct supplemental_page_table *spt = &thread_current ()->spt;
+	
+	struct supplemental_page_table *spt = &thread_current ()->spt; 
 	
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
@@ -262,107 +263,114 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 	DEG_RETURN ("value=void buckets=%p elem_cnt=%d",
 			spt->pages.buckets, (int) spt->pages.elem_cnt);
 }
-/* Copy supplemental page table from src to dst */
-bool
-supplemental_page_table_copy (struct supplemental_page_table *dst,
-		struct supplemental_page_table *src) {
+bool supplemental_page_table_copy(struct supplemental_page_table *dst,
+								  struct supplemental_page_table *src)
+{
 
-	//struct hash copy_page; //페이지 카피할 해시형 변수 생성
-	//hash_init(&copy_page, page_hash, page_less, NULL); //copy_page 초기화
+	// struct hash copy_page; //페이지 카피할 해시형 변수 생성
+	// hash_init(&copy_page, page_hash, page_less, NULL); //copy_page 초기화
 
-	//해시 순회
-	struct hash_iterator i; 
-	hash_first(&i, &src->pages); //해시 처음 가져오기
-	while(hash_next(&i)) { //해시 다 돌때까지 순회
-		struct page * pg = hash_entry(hash_cur(&i), struct page, elem); //페이지 순회하면서 삽입
-		enum vm_type cur_type = pg->operations->type; //cur_type : 현재 페이지 타입
+	// 해시 순회
+	struct hash_iterator i;
+	hash_first(&i, &src->pages); // 해시 처음 가져오기
+	while (hash_next(&i))
+	{																   // 해시 다 돌때까지 순회
+		struct page *pg = hash_entry(hash_cur(&i), struct page, elem); // 페이지 순회하면서 삽입
+		enum vm_type cur_type = pg->operations->type;				   // cur_type : 현재 페이지 타입
 
-		// 부모 페이지 타입에 따라 분류
 		if (cur_type == VM_UNINIT)
 		{ // 현재 타입이 uninit인 케이스
 			// 나중에 될 인자로 페이지 하나 생성해서 넣어줌, page_get_type은 uninit이 나중에 될 페이지를 리턴함
-			struct page * new_page = malloc(sizeof(struct page));
-			if(!new_page) { //new_page 할당 실패시
+			struct page *new_page = malloc(sizeof(struct page));
+			if (!new_page)
+			{ // new_page 할당 실패시
 				return false;
 			}
-
 			struct aux *new_aux = malloc(sizeof(struct aux)); // vm_alloc_page_with_initializer 함수에서따옴
-			*new_aux = *((struct aux *)(pg->uninit.aux));	  // struct로 형변환하고 삽입
+			*new_aux = *((struct aux *)(pg->uninit.aux));	   // struct로 형변환하고 삽입
 			// new_page의 원소들에 각각 삽입, 부모의 페이지를
-			uninit_new(new_page, pg->va, pg->uninit.init, page_get_type(pg), new_aux, pg->uninit.page_initializer);//페이지 초기화
-			if(!spt_insert_page(dst, new_page)) { //삽입 실패시
+			uninit_new(new_page, pg->va, pg->uninit.init, page_get_type(pg), new_aux, pg->uninit.page_initializer); // 페이지 초기화
+			if (!spt_insert_page(dst, new_page))
+			{ // 삽입 실패시
 				free(new_page);
 				free(new_aux);
 				return false;
 			}
 		}
-		else if(cur_type == VM_ANON){ //부모 타입이 anon 
-			//아니 시벌 새로운 페이지 생성을 어케 함? 이미 바뀌어버린거잖아
-			//둘다 그냥 vm_alloc_page로 생성한 후 ANON/FILE_BACKED로 바꾸게 페이지 폴트를 일부러 한번 일으켜야하나?
-			//근데 그건 말이 안되는데?? 원래 그냥 spt에 올리고 lazy 하는거잖음 
+		else if (cur_type == VM_ANON)
+		{
 			struct page *new_page = malloc(sizeof(struct page));
-			if(!new_page) {
+			if (!new_page)
+			{
 				return false;
 			}
-			//기본값들 채워주기
+			// 기본값들 채워주기
 			new_page->va = pg->va;
 			new_page->writable = pg->writable;
 			new_page->frame = NULL;
 
-			if(!anon_initializer(new_page, VM_ANON, NULL)) { //uninit이 아니게 되서 uninit_new를 못사용하니까 anon 이니셜라이저 사용.
+			if (!anon_initializer(new_page, VM_ANON, NULL))
+			{ // uninit이 아니게 되서 uninit_new를 못사용하니까 anon 이니셜라이저 사용.
 				free(new_page);
 				return false; // 초기화 실패한 경우
-			} 
-			if(!spt_insert_page(dst, new_page)) { //spt에 삽입
+			}
+			if (!spt_insert_page(dst, new_page))
+			{ // spt에 삽입
 				free(new_page);
 				return false;
 			}
-			if(!vm_do_claim_page(new_page)){ //바로 물리프레임 올리기
+			if (!vm_do_claim_page(new_page))
+			{ // 바로 물리프레임 올리기
 				free(new_page);
 				return false;
 			}
-			//부모 프레임 복사
+			// 부모 프레임 복사
 			memcpy(new_page->frame->kva, pg->frame->kva, PGSIZE);
 		}
-		else if(cur_type == VM_FILE) { //file_backed인 경우
+		else if (cur_type == VM_FILE)
+		{ // file_backed인 경우
 			struct page *new_page = malloc(sizeof(struct page));
-			if(!new_page) {
+			if (!new_page)
+			{
 				return false;
 			}
-			//기본값들 채워주기
+			// 기본값들 채워주기
 			new_page->va = pg->va;
 			new_page->writable = pg->writable;
 			new_page->frame = NULL;
 
-			if(!file_backed_initializer(new_page, VM_FILE, NULL)) { //uninit이 아니게 되서 uninit_new를 못사용하니까 anon 이니셜라이저 사용.
+			if (!file_backed_initializer(new_page, VM_FILE, NULL))
+			{ // uninit이 아니게 되서 uninit_new를 못사용하니까 anon 이니셜라이저 사용.
 				free(new_page);
 				return false; // 초기화 실패한 경우
-			} 
-			if(!spt_insert_page(dst, new_page)) { //spt에 삽입
+			}
+			if (!spt_insert_page(dst, new_page))
+			{ // spt에 삽입
 				free(new_page);
 				return false;
 			}
-			if(!vm_do_claim_page(new_page)){ //바로 물리프레임 올리기
+			if (!vm_do_claim_page(new_page))
+			{ // 바로 물리프레임 올리기
 				free(new_page);
 				return false;
 			}
-			//부모 프레임 복사
+			// 부모 프레임 복사
 			memcpy(new_page->frame->kva, pg->frame->kva, PGSIZE);
 		}
 	}
 	//++)아니 아 vm_alloc_page에서 현재 스레드 spt에 삽입해주고있는데, 이걸 뭐 어케함? 다른 유틸함수가 없잖아;;;
-	//포크에서는 세마로 부모 스레드를 재우고 자식 스레드가 동작해서 같이 공유하는 전광판을 체크해줘서 부모 스레드를 웨이터스로 바꿔줬잖아
-	//그러면 여기선 어캄? 존나게 근본적인 문제가 생겨버렸는데;; 
-	//아,,,,,,,,,, vm alloc page말고 걍 하나 구조체 생성해서 직접삽입............ ㅋㅋㅋㅋㅋㅋㅋㅋ
-		/*
-		if(!vm_alloc_page(pg->operations->type, pg->va, pg->writable)) { //새로운 페이지를 할당해줌.
-			return false;
-			//이녀석 함수 첫번째 인자는 이제 uninit이 나중에 어떤 페이지로 바뀔지 저장해주는인자임
-			//처음에 이런식으로 해줄랬는데, vm_alloc_page()는 램에 올려주는 함수기때문에.
-			//열어보면 UNINIT타입을 못받게 ASSERT가 내부에 걸려있음.
-			그래서 page_get_type()을 사용.
-		}
-		*/
+	// 포크에서는 세마로 부모 스레드를 재우고 자식 스레드가 동작해서 같이 공유하는 전광판을 체크해줘서 부모 스레드를 웨이터스로 바꿔줬잖아
+	// 그러면 여기선 어캄? 존나게 근본적인 문제가 생겨버렸는데;;
+	// 아,,,,,,,,,, vm alloc page말고 걍 하나 구조체 생성해서 직접삽입............ ㅋㅋㅋㅋㅋㅋㅋㅋ
+	/*
+	if(!vm_alloc_page(pg->operations->type, pg->va, pg->writable)) { //새로운 페이지를 할당해줌.
+		return false;
+		//이녀석 함수 첫번째 인자는 이제 uninit이 나중에 어떤 페이지로 바뀔지 저장해주는인자임
+		//처음에 이런식으로 해줄랬는데, vm_alloc_page()는 램에 올려주는 함수기때문에.
+		//열어보면 UNINIT타입을 못받게 ASSERT가 내부에 걸려있음.
+		그래서 page_get_type()을 사용.
+	}
+	*/
 	/*
 		//각각의 케이스에 따라서 할당, uninit, anon, file_backed
 		//anon, file_backed인 경우는 페이지 테이블에 올려줘야함
@@ -373,7 +381,61 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 		*/
 	return true;
 }
+/* Copy supplemental page table from src to dst */
+/*
+bool
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	struct hash_iterator i;
 
+	hash_first(&i, &src->pages);
+	while (hash_next(&i)){
+		struct page *src_page = hash_entry(hash_cur(&i), struct page, elem);
+		void *uva = src_page->va; // 둘 다 동일한 user virtual addr을 공유
+
+		bool is_uninit = VM_TYPE(src_page->operations->type) == VM_UNINIT;
+
+		if (is_uninit){
+			// uninit 상태이므로 page만 복사 (깊은 복사)
+			struct aux *src_aux = src_page->uninit.aux;
+			struct aux *dst_aux = NULL;
+
+			if (src_aux != NULL) {
+				dst_aux = malloc(sizeof(struct aux));
+				if (dst_aux == NULL) {
+					return false;
+				}
+				memcpy(dst_aux, src_aux, sizeof *src_aux);
+			}
+
+			if (!vm_alloc_page_with_initializer(page_get_type(src_page), uva,
+						src_page->writable, src_page->uninit.init, dst_aux)) {
+				free(dst_aux);
+				return false;
+			}
+		}
+		else{
+			// page와 매핑된 frame까지 새로 만들어서 데이터 복사
+			void *src_kva = src_page->frame->kva;
+
+			if (!vm_alloc_page(page_get_type(src_page), uva, src_page->writable)) {
+				return false;
+			}
+			if (!vm_claim_page(uva)) {
+				return false;
+			}
+			struct page *dst_page = spt_find_page(dst, uva);
+			if (dst_page == NULL || dst_page->frame == NULL) {
+				return false;
+			}
+
+			void *dst_kva = dst_page->frame->kva;
+			memcpy(dst_kva, src_kva, PGSIZE);
+		}
+	}
+	return true;
+}
+*/
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt) {
@@ -403,5 +465,12 @@ page_less (const struct hash_elem *a_,
 void destroy_page(struct hash_elem * e, void * aux UNUSED) {
 	//해시 원소 하나를 받아 해당 원소가 포함된 struct page를 찾고, 페이지 정리 후 free
 	struct page * page = hash_entry(e, struct page, elem);
+	if(page->frame) {
+		struct thread * t = thread_current();
+		palloc_free_page(page->frame->kva);
+		pml4_clear_page(t->pml4, page->va);
+		free(page->frame);
+	}
+	
 	vm_dealloc_page(page);
 }

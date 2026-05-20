@@ -57,15 +57,6 @@ struct initd_aux {
 	struct child_status *child_status;
 };
 
-struct aux {
-	struct file *file;
-	void *va;
-	off_t offset;
-	size_t read_bytes;
-	size_t zero_bytes;
-};
-
-
 /* initd와 그 외 프로세스에서 공통으로 사용하는 초기화 함수. */
 static void
 process_init (void) {
@@ -308,7 +299,6 @@ __do_fork (void *aux_) {
 	}
 
 	process_activate(current);
-
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt)) {
@@ -1088,7 +1078,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			DEG_RETURN ("value=0 reason=vm-alloc-fail upage=%p aux=%p", upage, lazy_aux);
 			return false;
 		}
-struct aux
+
 		/* 다음 페이지로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
