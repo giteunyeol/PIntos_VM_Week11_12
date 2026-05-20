@@ -1,7 +1,19 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
+#include <stddef.h>
+#include "filesys/off_t.h"
 #include "threads/thread.h"
+
+struct file;
+
+struct aux {
+	struct file *file;
+	void *va;
+	off_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
 
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_);
