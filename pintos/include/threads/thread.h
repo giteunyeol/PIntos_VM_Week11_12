@@ -129,7 +129,8 @@ struct  thread {
 #ifdef VM
 	/* 스레드가 소유한 전체 가상 메모리용 테이블. */
 	struct supplemental_page_table spt;
-#endif
+	uint64_t saved_user_rsp; /* syscall 진입 시 저장한 user stack pointer. */
+#endif	
 
 	/* `thread.c`가 관리한다. */
 	struct intr_frame tf;               /* 문맥 전환용 정보. */

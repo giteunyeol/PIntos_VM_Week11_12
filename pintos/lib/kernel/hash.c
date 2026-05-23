@@ -21,6 +21,8 @@ static void rehash (struct hash *);
 
 /* 보조 데이터 `AUX`를 바탕으로 해시 값은 `HASH`, 비교는 `LESS`를
    사용하도록 해시 테이블 `H`를 초기화한다. */
+   //bool hash_init (struct hash *, hash_hash_func *, hash_less_func *, void *aux);
+
 bool
 hash_init (struct hash *h,
 		hash_hash_func *hash, hash_less_func *less, void *aux) {

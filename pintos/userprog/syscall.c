@@ -18,6 +18,8 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include "threads/malloc.h"
+#include "debug_trace.h"
+#include "vm/vm.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -60,6 +62,12 @@ syscall_init (void) {
 
 /* user가 요청한 fd를 읽어 buffer에 내용을 저장 */
 int read(int fd, void *buffer, unsigned size) {
+	DEG_NOTE ("read", "fd=%d start=%p end=%p start_page=%p end_page=%p size=%u",
+			fd,
+			buffer, size > 0 ? (uint8_t *) buffer + size - 1 : buffer,
+			pg_round_down(buffer),
+			size > 0 ? pg_round_down((uint8_t *) buffer + size - 1) : pg_round_down(buffer),
+			size);
 	/* 인자 기본 검사 */
 	if (fd < 0) {
 		return -1;
@@ -74,6 +82,7 @@ int read(int fd, void *buffer, unsigned size) {
 	}
 
 	validate_user_buffer(buffer, size);
+	DEG_NOTE ("read", "validated buffer=%p size=%u", buffer, size);
 
 	/* 실제 read를 수행 */
 	size_t i;
@@ -94,6 +103,8 @@ int read(int fd, void *buffer, unsigned size) {
 		off_t read_size = file_read(entry->file, buffer, size);
 		lock_release(&filesys_lock); // file이면 filesys lock 해제
 
+		DEG_NOTE ("read", "file_read ret=%d fd=%d buffer=%p size=%u",
+				(int) read_size, fd, buffer, size);
 		return read_size; // 읽은 바이트 수 반환
 	}
 	return -1;
@@ -122,6 +133,7 @@ find_fd_entry(int fd) {
 void
 syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
+	thread_current()->saved_user_rsp = f->rsp;
 
 	struct thread *t = thread_current();
 
@@ -185,9 +197,8 @@ syscall_handler (struct intr_frame *f) {
 
 	case SYS_WRITE: {
 		int fd = (int) f->R.rdi;
-		const void *buffer = (const void *) f->R.rsi;
+		const char *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
-
 		if (size == 0) {
 			f->R.rax = 0;
 			break;
@@ -217,7 +228,20 @@ syscall_handler (struct intr_frame *f) {
 		/* read(fd, buffer, size)의 인자는 syscall_entry가 저장한 레지스터에서
 		 * 꺼낸다. rdi는 fd, rsi는 사용자 버퍼 주소, rdx는 읽을 바이트 수다.
 		 * 시스템 콜 반환값도 rax로 돌아가므로 read() 결과를 f->R.rax에 저장한다. */
+		//buffer : 읽은 데이터를 써 넣을 목적지
+		const char *buffer = (const void *)f->R.rsi;
+		struct page *page = spt_find_page(&thread_current()->spt, (void *) buffer);
+		DEG_NOTE ("read", "fd=%d buffer=%p size=%u page=%p writable=%d saved_rsp=%p",
+				(int) f->R.rdi, buffer, (unsigned) f->R.rdx,
+				page, page != NULL ? page->writable : -1,
+				(void *) thread_current()->saved_user_rsp);
+		if (page && !page->writable) {
+			DEG_NOTE ("kill", "reason=read-readonly-page buffer=%p page=%p", buffer, page);
+			kill_process_due_to_bad_user_memory();
+		}
 		f->R.rax = read((int) f->R.rdi, (void *) f->R.rsi, (unsigned) f->R.rdx);
+		DEG_NOTE ("read", "return=%d buffer=%p size=%u",
+				(int) f->R.rax, buffer, (unsigned) f->R.rdx);
 		break;
 	}
 
@@ -346,9 +370,25 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
+	bool is_user_addr = ptr != NULL && is_user_vaddr(ptr);
 
-	if (ptr == NULL || !is_user_vaddr(ptr) ||
-			pml4_get_page(cur->pml4, ptr) == NULL) {
+	if (is_user_addr) {
+		void *mapped = pml4_get_page(cur->pml4, ptr);
+		if(!mapped) {
+			struct page *page = spt_find_page(&cur->spt, (void *) ptr);
+			bool claimed = vm_claim_page((void *) ptr);
+
+			if (!claimed) {
+				if (USER_STACK - STACK_LIMIT <= ptr &&ptr < USER_STACK &&ptr >= cur->saved_user_rsp - 8) {
+					vm_alloc_page(VM_ANON, pg_round_down(ptr), true);
+					vm_claim_page(ptr);
+				} else {
+					kill_process_due_to_bad_user_memory();
+				}
+			} 
+		}
+	} else {
+		DEG_NOTE ("kill", "reason=validate-not-user ptr=%p", ptr);
 		kill_process_due_to_bad_user_memory();
 	}
 }
@@ -380,6 +420,8 @@ validate_user_string(const char *str) {
 
 static void
 kill_process_due_to_bad_user_memory(void) {
+	DEG_NOTE ("kill", "exit_status=-1 saved_rsp=%p",
+			(void *) thread_current()->saved_user_rsp);
 	thread_current()->exit_status = -1;
 	thread_exit();
 }

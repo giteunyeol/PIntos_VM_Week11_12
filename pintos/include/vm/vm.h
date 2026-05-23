@@ -18,7 +18,7 @@ enum vm_type {
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
 	VM_MARKER_0 = (1 << 3),
-	VM_MARKER_1 = (1 << 4),
+	VM_MARKER_1 = (1 << 4), 
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -27,6 +27,7 @@ enum vm_type {
 #include "vm/uninit.h"
 #include "vm/anon.h"
 #include "vm/file.h"
+#include "kernel/hash.h"
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
@@ -41,15 +42,15 @@ struct thread;
  * uninit_page, file_page, anon_page, and page cache (project4).
  * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
 struct page {
-	const struct page_operations *operations;
-	void *va;              /* Address in terms of user space */
-	struct frame *frame;   /* Back reference for frame */
-
-	/* Your implementation */
-
+	const struct page_operations *operations;  //이 page가 어떤 동작을 할지 가리키는 함수 묶음
+	void *va;              /* Address in terms of user space */ // 이 page가 담당하는 사용자 가상 주소
+	struct frame *frame;   /* Back reference for frame */ //이 page가 올라갈 물리 프레임에 대한 포인터
+	struct hash_elem elem;
+	bool writable;
+	
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
-	union {
+	union { //페이지가 바뀔타입
 		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
@@ -73,7 +74,7 @@ struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);
 	void (*destroy) (struct page *);
-	enum vm_type type;
+	enum vm_type type; //페이지 현재타입
 };
 
 #define swap_in(page, v) (page)->operations->swap_in ((page), v)
@@ -85,6 +86,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash pages;
 };
 
 #include "threads/thread.h"
@@ -101,12 +103,13 @@ void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
 
-#define vm_alloc_page(type, upage, writable) \
-	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)
+// lazy정보를 안받음 : vm_alloc_page
+// lazy정보를 받음 : vm_alloc_page_with_initializer
+#define vm_alloc_page(type, upage, writable) \ 
+	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL) 
 bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
 		bool writable, vm_initializer *init, void *aux);
 void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
-
 #endif  /* VM_VM_H */

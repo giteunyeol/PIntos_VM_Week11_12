@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "intrinsic.h"
+#include "debug_trace.h"
 
 /* 처리한 페이지 폴트 수. */
 static long long page_fault_cnt;
@@ -127,15 +128,21 @@ page_fault (struct intr_frame *f) {
 	not_present = (f->error_code & PF_P) == 0;
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
+	DEG_CALL ("fault_addr=%p rip=%p rsp=%p err=%llx user=%d write=%d not_present=%d",
+			fault_addr, (void *) f->rip, (void *) f->rsp,
+			(unsigned long long) f->error_code, user, write, not_present);
 
 #ifdef VM
 	/* project 3 이후에서 사용한다. */
-	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
+	bool handled = vm_try_handle_fault (f, fault_addr, user, write, not_present);
+	DEG_NOTE ("vmtry", "handled=%d fault_addr=%p", handled, fault_addr);
+	if (handled)
 		return;
 #endif
 
 	/* 페이지 폴트 수를 센다. */
 	page_fault_cnt++;
+	DEG_NOTE ("kill", "fault_addr=%p cnt=%lld", fault_addr, page_fault_cnt);
 
 	/* 실제 폴트라면 종료한다. */
 	kill (f);

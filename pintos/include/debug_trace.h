@@ -8,7 +8,7 @@
 #include "threads/vaddr.h"
 
 #ifndef DEG_TRACE_ENABLED
-#define DEG_TRACE_ENABLED 1
+#define DEG_TRACE_ENABLED 0 
 #endif
 
 #define DEG_THREAD_MAGIC 0xcd6abf4b
