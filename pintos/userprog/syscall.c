@@ -1,6 +1,8 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+
+#include "debug_trace.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
@@ -14,6 +16,7 @@
 #include "devices/input.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "kernel/stdio.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
@@ -124,6 +127,10 @@ syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
 
 	struct thread *t = thread_current();
+#ifdef VM
+	t->rsp_at_syscall = f->rsp;
+	struct supplemental_page_table spt = thread_current()->spt;
+#endif
 
 	switch (f->R.rax)
 	{
@@ -188,6 +195,8 @@ syscall_handler (struct intr_frame *f) {
 		const void *buffer = (const void *) f->R.rsi;
 		size_t size = (size_t) f->R.rdx;
 
+		DEG_NOTE ("WRITE", "CALL fd=%d, buf=%p sz=%d", fd, buffer, size);
+
 		if (size == 0) {
 			f->R.rax = 0;
 			break;
@@ -195,20 +204,25 @@ syscall_handler (struct intr_frame *f) {
 
 		if (fd == 1) {
 			validate_user_buffer(buffer, size);
-			putbuf(buffer, size);
+			putbuf (buffer, size);
 			f->R.rax = size;
 		} else if (fd >= 2) {
 			struct fd_entry *entry = find_fd_entry(fd);
 			if (entry == NULL || entry->file == NULL) {
 				f->R.rax = -1;
+				// DEG_NOTE ("WRITE",
+				// 			"END-0 (entry == NULL)=%d, (entry->file == NULL)=%d",
+				// 			entry == NULL, entry->file == NULL);
 				break;
 			}
 			validate_user_buffer(buffer, size);
 			lock_acquire(&filesys_lock);
 			f->R.rax = file_write(entry->file, buffer, size);
 			lock_release(&filesys_lock);
+			//DEG_NOTE ("WRITE", "END-S fd=%d, buf=%p sz=%d", fd, buffer, size);
 		} else {
 			f->R.rax = -1;
+			//DEG_NOTE ("WRITE", "END-1");
 		}
 		break;
 	}
@@ -244,6 +258,7 @@ syscall_handler (struct intr_frame *f) {
 			 e = list_next(e)) {
 			struct fd_entry *entry = list_entry(e, struct fd_entry, elem);
 			if (entry->fd == fd) {
+				DEG_NOTE ("sys.close", "fd=%d, file=%p", fd, entry->file);
 				lock_acquire(&filesys_lock);
 				file_close(entry->file);
 				lock_release(&filesys_lock);
@@ -310,9 +325,107 @@ syscall_handler (struct intr_frame *f) {
 		f->R.rax = ret;
 		break;
 	}
-	
-	default:
+
+	// void *
+	// mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+	//
+	// 유효성 검사 후 락 걸어서 do_mmap에게 넘김, 핵심 처리는 없고 유효성 검사만 좀 함
+	case SYS_MMAP: {
+		void *addr = (void *) f->R.rdi;
+		size_t length = f->R.rsi;
+		int writable = (int) f->R.rdx;
+		int fd = (int) f->R.r10;
+		off_t offset = (off_t) f->R.r8;
+
+		if (addr == NULL) {
+			goto err_mmap;
+		}
+
+		//TODO: 이게 길이가 너무 길어서 length/2 조건을 추가했는데 최선은 아닌거 같긴 함;;
+		// 나중에 바꾸던가 하기
+		//DEG_NOTE("chk", "addr=%p length=%p KERN_BASE=%p", addr, length, KERN_BASE);
+		if (is_kernel_vaddr (addr + length)
+				|| is_kernel_vaddr (addr)
+				|| is_kernel_vaddr (addr + (length/2))) {
+			goto err_mmap;
+		}
+		//DEG_NOTE("chk", "e1=%d e2=%d", is_kernel_vaddr (addr + length), is_kernel_vaddr (addr));
+
+		if (addr != pg_round_down (addr)) { // 아마 up이든 down이든 상관없을듯? 경계인지가 중요해서
+			goto err_mmap;
+		}
+
+		if (offset % PGSIZE != 0) {
+			goto err_mmap;
+		}
+
+		// 이거 page 단위로 넘겨가며 검사, addr이 경계 영역이라 ㄱㅊ
+		for (size_t i = 0; i < length; i += PGSIZE) {
+			bool is_alloced = spt_find_page (&spt, addr + i) != NULL;
+			if (is_alloced) {
+				goto err_mmap;
+			}
+		}
+
+		if (fd < 2) {
+			goto err_mmap;
+		}
+
+		struct fd_entry *found = NULL;
+		struct list_elem *e;
+		for (e = list_begin(&t->fd_list);
+			 e != list_end(&t->fd_list);
+			 e = list_next(e)) {
+			struct fd_entry *entry = list_entry(e, struct fd_entry, elem);
+			if (entry->fd == fd) {
+				found = entry;
+				break;
+			}
+		}
+
+		bool is_not_found = found == NULL;
+		if (is_not_found) {
+			goto err_mmap;
+		}
+
+		int f_length = file_length(found->file);
+		if (f_length <= 0) {
+			goto err_mmap;
+		}
+
+		lock_acquire(&filesys_lock);
+		f->R.rax = (uintptr_t) do_mmap (addr, length, writable, found->file, offset);
+		lock_release(&filesys_lock);
+
 		break;
+	err_mmap:
+		f->R.rax = (uintptr_t) NULL;
+		break;
+	}
+
+	// void
+	// munmap (void *addr);
+	case SYS_MUNMAP: {
+		void *addr = (void *) f->R.rdi;
+
+		if (addr == NULL) {
+			goto err_munmap;
+		}
+
+		if (addr != pg_round_down (addr)) { // 아마 up이든 down이든 상관없을듯? 경계인지가 중요해서
+			goto err_munmap;
+		}
+
+		do_munmap (addr);
+
+		break;
+	err_munmap:
+		f->R.rax = (uintptr_t) NULL;
+		break;
+	}
+
+	default:
+		PANIC ("unsurported syscall code");
 	}
 }
 
@@ -343,15 +456,35 @@ static bool copy_in_string (char *buf, const char *command, size_t size) {
     return false;
 }
 
+#ifndef VM
 static void
 validate_user_ptr(const void *ptr) {
 	struct thread *cur = thread_current();
 
-	if (ptr == NULL || !is_user_vaddr(ptr) ||
+	if (ptr == NULL || is_kernel_vaddr(ptr) ||
 			pml4_get_page(cur->pml4, ptr) == NULL) {
 		kill_process_due_to_bad_user_memory();
 	}
 }
+#else
+static void
+validate_user_ptr(const void *ptr) {
+	struct thread *cur = thread_current();
+	struct supplemental_page_table spt = cur->spt;
+
+	void *va = pg_round_down (ptr);
+
+	bool is_null = ptr == NULL;
+	bool is_kva = is_kernel_vaddr(ptr);
+	bool is_no_spt = spt_find_page (&spt, va) == NULL;
+	// syscall 내부라서 스레드 rsp가 항상 유효함
+	bool is_no_stack = !validate_stack_area (cur->rsp_at_syscall, ptr);
+	bool is_bad_area = is_no_spt && is_no_stack;
+	if (is_null || is_kva || is_bad_area) {
+		kill_process_due_to_bad_user_memory();
+	}
+}
+#endif
 
 static void
 validate_user_buffer(const void *buffer, size_t size) {

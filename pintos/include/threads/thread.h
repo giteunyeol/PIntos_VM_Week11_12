@@ -129,6 +129,7 @@ struct  thread {
 #ifdef VM
 	/* 스레드가 소유한 전체 가상 메모리용 테이블. */
 	struct supplemental_page_table spt;
+	uintptr_t rsp_at_syscall; // 시스템 콜 호출 시점의 rsp
 #endif
 
 	/* `thread.c`가 관리한다. */
